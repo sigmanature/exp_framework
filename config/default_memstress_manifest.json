@@ -1,5 +1,5 @@
 {
-  "_template": "android-thp-fallback-sampler default memstress manifest. 复制后可替换 serial 与 packages 再运行。",
+  "_template": "exp_framework default memstress manifest. 复制后可替换 serial 与 packages 再运行。",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
