@@ -155,10 +155,15 @@ For the 4 KB baseline run, `fallback_ratio` may stay at zero or otherwise be les
 ```text
 .
 ├── README.md                           # this file
+├── pyproject.toml                      # standard Python project (src layout)
 ├── config/
 │   └── default_memstress_manifest.json # default experiment configuration
-└── scripts/
-    ├── run_memstress_and_collect_logs.py   # main script
+├── scripts/                            # thin-shell entry points (path-compatible)
+│   └── run_memstress_and_collect_logs.py   # main script entry
+└── src/exp_framework/                  # core library
+    ├── run_memstress_and_collect_logs.py   # main script implementation
     ├── derive_metrics.py                   # generates derived.csv and summary.md
+    ├── backend/                            # experiment backends (memstress, madvise_pagout)
+    ├── experiment/                         # framework: runner / sample / config
     └── utils/                              # modules required by the main script
 ```

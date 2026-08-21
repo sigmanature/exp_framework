@@ -30,13 +30,15 @@ python3 scripts/run_memstress_and_collect_logs.py \
 
 ## 文件说明
 
+> 组织方式：`src/exp_framework/` 为核心代码（标准 Python 包），`scripts/` 下为同名薄壳入口（路径兼容，实际逻辑在 `src/exp_framework/` 内）。
+
 - `config/default_memstress_manifest.json`：默认 memstress + THP stats 采样配置模板，已固定 seed / max_cycles / interval_s。
 - `scripts/run_memstress_and_collect_logs.py`：主脚本。
 - `scripts/derive_metrics.py`：运行结束后由主脚本调用，生成 `derived.csv` 和 `summary.md`。
 - `scripts/compute_synthetic_workload_expectations.py`：根据 synthetic `profiles.tsv`、`run_manifest.json` 和可选 `memstress/cycle_log.jsonl`，生成每个 app 的预期 VMA/COW/dlopen/filemap/Scudo/Java 页数，以及 launch-weighted 组件比例。
 - `scripts/sample_anon_vma_sizes.py`：从 rooted Android 设备批量采集三方进程 `/proc/<pid>/smaps`，按匿名 VMA kind/process 输出 size/RSS/swap 分位，用来校准 synthetic APK 的 VMA 尺寸和触页强度。
 - `scripts/order0_fragment_sampler.py`：与负载并行的独立采样进程，按挂钟周期（`--interval-s`，默认 10s）通过 adb 采集 `/proc/vmstat` + `/proc/zoneinfo` + `/proc/pagetypeinfo` + 关键 sysctl/THP 设置，输出 `samples.jsonl`（原始记录，vmstat 全量）、`order0_vmstat_samples.csv`（仅导出白名单命中的计数器）、`fragmentation_samples.csv`（按 zone × migrate type 的 unsuitable free / fragmentation_score / PCP order-0）。输入：`--adb`、`--serial`、`--out-dir`、`--interval-s`、`--target-order`（默认 2）以及 `--expected-*`（期望的 uffd_mfill_order2 / mthp_cow_order2 / kfragd_enabled / compact_order2_alloc_wake / kswapd_order2_threshold / kswapd_order2_wakeup_threshold，写入 `sampler_manifest.json` 供事后核对实验开关是否生效）。CSV 导出白名单可外部驱动：`--vmstat-key-patterns`（可多次、可逗号分隔）或环境变量 `VMSTAT_KEY_PATTERNS`，`--vmstat-keys-mode append|replace`（默认 append）控制是否保留内置默认白名单；规则语法为 `foo*`=前缀通配、无 `*`=子串匹配。采样器启动时向 stderr 打印最终生效的白名单来源（default/env/cli）和首次采样匹配到的 key 数。附带 `--device-probe deploy|start|watch|stop|pull|verify` 子命令编排设备端 20ms 探针（frag20ms），用于 kfragd 细粒度观测。退出时生成 `vmstat_delta.json` 及 `order0_source_delta.tsv` / `pcp_order0_delta.tsv` / `stall_compaction_delta.tsv`。
-- `scripts/utils/`：主脚本依赖的公共模块（adb/su、设备准备、采样、包解析、崩溃检测等）。
+- `src/exp_framework/utils/`：主脚本依赖的公共模块（adb/su、设备准备、采样、包解析、崩溃检测等）；`src/exp_framework/backend/`（memstress/madvise_pagout 实验类 + experiment-standard 接口）、`src/exp_framework/experiment/`（前端框架 runner/sample/config）。
 - `references/`：与 adb、memstress 策略、包选择、内核补丁相关的参考文档。
 
 ## PARAMS.md 表驱动 vmstat 导出白名单（文档约定，仅映射说明）
