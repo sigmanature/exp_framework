@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 
-SKILL_SCRIPTS = Path("/home/nzzhao/.agents/skills/android-thp-fallback-sampler/scripts")
+SKILL_SCRIPTS = Path("/home/nzzhao/.agents/skills/exp_framework/scripts")
 sys.path.insert(0, str(SKILL_SCRIPTS))
 
 from utils.crash_signature import TargetCrashSignatureDetector

@@ -1,5 +1,5 @@
 ---
-name: android-thp-fallback-sampler
+name: exp_framework
 description: automate long-running sampling of android anon 16KB large folio fallback stats via adb; run memstress workload and output raw/derived csv + summary.
 ---
 

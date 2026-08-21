@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-SKILL_SCRIPTS = Path("/home/nzzhao/.agents/skills/android-thp-fallback-sampler/scripts")
+SKILL_SCRIPTS = Path("/home/nzzhao/.agents/skills/exp_framework/scripts")
 sys.path.insert(0, str(SKILL_SCRIPTS))
 
 from utils.device_prep import cleanup_after_boot  # noqa: E402

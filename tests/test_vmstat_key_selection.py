@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 
-SKILL_SCRIPTS = Path("/home/nzzhao/.agents/skills/android-thp-fallback-sampler/scripts")
+SKILL_SCRIPTS = Path("/home/nzzhao/.agents/skills/exp_framework/scripts")
 sys.path.insert(0, str(SKILL_SCRIPTS))
 
 from order0_fragment_sampler import (  # noqa: E402

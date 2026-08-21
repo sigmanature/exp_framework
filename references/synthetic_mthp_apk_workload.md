@@ -8,7 +8,7 @@ Run from the AOSP root, without invoking Soong:
 
 ```bash
 AOSP_ROOT=$PWD \
-  ~/.agents/skills/android-thp-fallback-sampler/scripts/build_mthp_synth_apks.py \
+  ~/.agents/skills/exp_framework/scripts/build_mthp_synth_apks.py \
   --out-dir .worklog/synthetic-mthp-apk/out-$(date +%Y%m%d-%H%M%S)-final \
   --max-pads 64 \
   --pad-rodata-kb 256 \
@@ -46,7 +46,7 @@ Build and install the full 60-APK profile once. After that, scale-only retuning 
 For the first lower-pressure profile, keep anonymous VMA count and embedded `.so` pressure stable while reducing anonymous/COW pressure and shrinking explicit filemap length:
 
 ```bash
-python3 ~/.agents/skills/android-thp-fallback-sampler/scripts/run_memstress_and_collect_logs.py \
+python3 ~/.agents/skills/exp_framework/scripts/run_memstress_and_collect_logs.py \
   --serial <SERIAL> \
   --out-dir <OUT_DIR> \
   --package-file /home/nzzhao/learn_os/android17/.worklog/synthetic-mthp-apk/out-YYYYmmdd-HHMMSS-full/packages.txt \
@@ -120,7 +120,7 @@ Build-time scaling remains available for offline profile inspection, but it is n
 
 ```bash
 AOSP_ROOT=$PWD \
-  ~/.agents/skills/android-thp-fallback-sampler/scripts/build_mthp_synth_apks.py \
+  ~/.agents/skills/exp_framework/scripts/build_mthp_synth_apks.py \
   --out-dir .worklog/synthetic-mthp-apk/out-$(date +%Y%m%d-%H%M%S)-anonhalf-cow60 \
   --max-pads 64 \
   --pad-rodata-kb 256 \
@@ -141,7 +141,7 @@ For VMA-alignment A/B runs, inspect `vmstat_derived.csv` deltas for `anon_mthp_v
 Do not pass only `--package-file` for synthetic long runs. The script's built-in defaults are lower pressure (`burst_size=1`, `hold_ms=200`, `launch_gap_ms=350`). Preserve the skill/default-manifest pressure profile explicitly:
 
 ```bash
-python3 ~/.agents/skills/android-thp-fallback-sampler/scripts/run_memstress_and_collect_logs.py \
+python3 ~/.agents/skills/exp_framework/scripts/run_memstress_and_collect_logs.py \
   --serial <SERIAL> \
   --out-dir <OUT_DIR> \
   --max-cycles 120 \
@@ -160,7 +160,7 @@ python3 ~/.agents/skills/android-thp-fallback-sampler/scripts/run_memstress_and_
 
 ```bash
 APK_OUT=/home/nzzhao/learn_os/android17/.worklog/synthetic-mthp-apk/out-YYYYmmdd-HHMMSS-final \
-  ~/.agents/skills/android-thp-fallback-sampler/scripts/install_mthp_synth_apks_ab.sh run
+  ~/.agents/skills/exp_framework/scripts/install_mthp_synth_apks_ab.sh run
 ```
 
 ## Validation Profiles

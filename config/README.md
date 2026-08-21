@@ -1,10 +1,10 @@
 # Config templates
 
-本目录保存 `android-thp-fallback-sampler` 组件的默认运行配置（manifest）。
+本目录保存 `exp_framework` 组件的默认运行配置（manifest）。
 
 ## 组件归属说明
 
-本目录属于 **memstress 负载组件**（`android-thp-fallback-sampler`）。这里的 manifest 是该组件自己的默认配置，只描述本组件的负载行为；内核参数、设备准备、实验编排等属于其他组件，各有各的 manifest，不在本目录定义。
+本目录属于 **memstress 负载组件**（`exp_framework`）。这里的 manifest 是该组件自己的默认配置，只描述本组件的负载行为；内核参数、设备准备、实验编排等属于其他组件，各有各的 manifest，不在本目录定义。
 
 ## 默认配置 vs synthetic 负载（平台形态）
 
