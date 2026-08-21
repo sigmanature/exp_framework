@@ -14,8 +14,6 @@ from __future__ import annotations
 import sys
 from typing import Any, Dict, List, Optional
 
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
-
 from exp_framework.utils import pkg_utils  # noqa: E402
 from exp_framework.utils import sysctl_util  # noqa: E402
 from exp_framework.utils import tasktime_utils  # noqa: E402

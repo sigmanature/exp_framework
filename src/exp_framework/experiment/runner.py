@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 
 from exp_framework.utils.adb_utils import ensure_adb_works
 
-import exp_framework.experiments  # noqa: F401  (注册后端副作用)
+import exp_framework.backend  # noqa: F401  (注册后端副作用)
 from exp_framework.experiment.experiment import create_experiment
 from exp_framework.experiment.config import (load_config, backend_from_config,
                                new_run_manifest, write_run_manifest,
