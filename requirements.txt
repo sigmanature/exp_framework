@@ -1,0 +1,2 @@
+# No third-party Python packages are required.
+# Host-side prerequisites: Python 3.10+ and adb available in PATH.

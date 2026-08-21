@@ -1,0 +1,185 @@
+{
+  "serial": null,
+  "config": {
+    "counters": [],
+    "interval_s": 60,
+    "backend": {
+      "name": "memstress",
+      "config": {
+        "packages": [
+          "com.chinamworld.main",
+          "com.sdu.didi.psnger",
+          "com.tencent.tmgp.pubgmhd",
+          "me.ele",
+          "com.baidu.homework",
+          "com.tencent.mm",
+          "com.cainiao.wireless",
+          "com.kugou.android",
+          "com.achievo.vipshop",
+          "com.tencent.KiHan",
+          "com.chinamworld.bocmbci",
+          "com.ss.android.article.video",
+          "com.zhihu.android",
+          "com.MobileTicket",
+          "com.tencent.news",
+          "cn.wps.moffice_eng",
+          "com.alibaba.android.rimet",
+          "com.baidu.searchbox",
+          "com.kmxs.reader",
+          "com.qidian.QDReader",
+          "com.tencent.tmgp.sgame",
+          "com.xs.fm",
+          "com.kuaiduizuoye.scan",
+          "com.phoenix.read",
+          "com.icbc",
+          "com.mfashiongallery.emag",
+          "com.dz.hmjc",
+          "com.netease.cloudmusic",
+          "com.tencent.mtt",
+          "com.taobao.taobao",
+          "com.eg.android.AlipayGphone",
+          "com.tencent.mobileqq",
+          "com.autonavi.minimap",
+          "com.baidu.BaiduMap",
+          "com.UCMobile",
+          "com.cmcc.cmvideo",
+          "com.ss.android.ugc.aweme.lite",
+          "com.jingdong.app.mall",
+          "com.xunmeng.pinduoduo",
+          "com.sankuai.meituan",
+          "com.dianping.v1",
+          "com.ct.client",
+          "com.miHoYo.Yuanshen",
+          "com.tencent.tmgp.cf",
+          "com.tencent.tmgp.speedmobile",
+          "com.tencent.tmgp.pubgm",
+          "com.kuaishou.nebula",
+          "com.tencent.qqlive",
+          "com.hunantv.imgo.activity",
+          "com.youku.phone",
+          "com.sohu.sohuvideo",
+          "com.qiyi.video",
+          "com.duowan.kiwi",
+          "com.tencent.wemeet.app",
+          "com.tencent.meeting",
+          "com.tencent.qqmusic",
+          "com.kuwo.player",
+          "com.tencent.weishi",
+          "com.mogujie.app",
+          "com.taobao.idlefish",
+          "com.luojilab.player",
+          "com.tencent.android.qqdownloader",
+          "com.ss.android.article.lite",
+          "com.tencent.news.lite",
+          "com.tencent.tbs",
+          "com.zhihu.android.lite",
+          "com.qiyi.video.lite",
+          "com.tencent.qqlive.lite",
+          "com.baidu.searchbox.lite",
+          "com.tencent.mm.lite",
+          "com.ss.android.ugc.aweme.lite",
+          "com.tencent.tmgp.sgame.lite",
+          "com.tencent.tmgp.pubgmhd.lite",
+          "com.tencent.mobileqq.lite",
+          "com.eg.android.AlipayGphone.lite",
+          "com.taobao.taobao.lite",
+          "com.jingdong.app.mall.lite",
+          "com.xunmeng.pinduoduo.lite",
+          "com.sankuai.meituan.lite",
+          "com.dianping.v1.lite",
+          "com.ct.client.lite",
+          "com.miHoYo.Yuanshen.lite",
+          "com.kuaishou.nebula.lite",
+          "com.tencent.qqlive.lite",
+          "com.hunantv.imgo.activity.lite",
+          "com.youku.phone.lite",
+          "com.sohu.sohuvideo.lite",
+          "com.qiyi.video.lite",
+          "com.duowan.kiwi.lite",
+          "com.tencent.wemeet.app.lite",
+          "com.tencent.meeting.lite",
+          "com.tencent.qqmusic.lite",
+          "com.kuwo.player.lite",
+          "com.tencent.weishi.lite",
+          "com.mogujie.app.lite",
+          "com.taobao.idlefish.lite",
+          "com.luojilab.player.lite",
+          "com.tencent.android.qqdownloader.lite",
+          "com.ss.android.article.lite"
+        ],
+        "burst_size": 4,
+        "hold_ms": 15,
+        "launch_gap_ms": 15,
+        "cycle_sleep_ms": 1000,
+        "seed": 20260617,
+        "max_cycles": 120
+      }
+    }
+  },
+  "sample_config": {
+    "trace": {
+      "captures": [
+        {
+          "name": "kswapd",
+          "events": [
+            "vmscan:mm_vmscan_kswapd_wake",
+            "vmscan:mm_vmscan_kswapd_sleep"
+          ],
+          "buffer_kb": 256
+        },
+        {
+          "name": null,
+          "events": [
+            "vmscan:mm_vmscan_direct_reclaim_begin",
+            "vmscan:mm_vmscan_direct_reclaim_end",
+            "vmscan:mm_vmscan_memcg_reclaim_begin",
+            "vmscan:mm_vmscan_memcg_reclaim_end",
+            "vmscan:mm_vmscan_reclaim_pages"
+          ],
+          "buffer_kb": 16384
+        }
+      ]
+    },
+    "tasktime": {
+      "procs": [
+        "kswapd0",
+        "kcompactd0",
+        "kcompressd:0",
+        "kcompressd:1",
+        "kcompressd:2",
+        "kcompressd:3"
+      ]
+    },
+    "lock_stat": {
+      "enabled": false
+    },
+    "vmstat": {
+      "keys": [
+        "allocstall_normal",
+        "allocstall_movable",
+        "alloc_stall_wmark",
+        "alloc_stall_fragment",
+        "pgsteal_order0_kswapd",
+        "pgsteal_order2_kswapd",
+        "pgsteal_order2_direct",
+        "compact_stall",
+        "file_alloc_order0_total",
+        "file_alloc_order2_total",
+        "vma_anon_alloc_order0_total",
+        "vma_anon_alloc_order2_total",
+        "pgscan_anon",
+        "pgscan_file",
+        "pgsteal_anon",
+        "pgsteal_file"
+      ],
+      "interval_s": 60,
+      "buddyinfo": {
+        "interval_s": 60,
+        "enabled": true
+      }
+    },
+    "power": {
+      "odpm": true
+    }
+  }
+}

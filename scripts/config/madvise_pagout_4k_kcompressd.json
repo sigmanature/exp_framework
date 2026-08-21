@@ -1,0 +1,87 @@
+{
+  "serial": null,
+  "config": {
+    "_ctx": {
+      "serial": "21121FDF600C4G"
+    },
+    "counters": [],
+    "interval_s": 60,
+    "sysctl_nodes": [
+      {
+        "param": "kfragd_enabled",
+        "path": "/proc/sys/vm/kfragd_enabled",
+        "expected": "0"
+      },
+      {
+        "param": "kswapd_order2_threshold",
+        "path": "/proc/sys/vm/kswapd_order2_threshold",
+        "expected": "0"
+      },
+      {
+        "param": "kswapd_o2_wakeup",
+        "path": "/proc/sys/vm/kswapd_order2_wakeup_threshold",
+        "expected": "0"
+      },
+      {
+        "param": "compact_o2_alloc_wake",
+        "path": "/proc/sys/vm/compact_order2_alloc_wake",
+        "expected": "0"
+      },
+      {
+        "param": "zram_disksize",
+        "path": "/sys/block/zram0/disksize",
+        "expected": "8589934592"
+      },
+      {
+        "param": "mthp_16k",
+        "path": "/sys/kernel/mm/transparent_hugepage/hugepages-16kB/enabled",
+        "expected": "[never]"
+      },
+      {
+        "param": "kcompressd_enabled",
+        "path": "/sys/module/kcompressd/parameters/kcompressd_enabled",
+        "expected": "1"
+      }
+    ],
+    "backend": {
+      "name": "madvise_pagout",
+      "config": {
+        "group": "4k_kcompressd",
+        "rounds": 10,
+        "bench_src": "/home/nzzhao/learn_os/.worklog/madvise_pagout_bench/src/bench.c",
+        "bench_out": "/home/nzzhao/learn_os/.worklog/madvise_pagout_bench/out/madvise_pagout_bench",
+        "bench_remote": "/data/local/tmp/madvise_pagout_bench",
+        "pin_cpu": "80"
+      }
+    }
+  },
+  "sample_config": {
+    "tasktime": {
+      "procs": [
+        "kswapd0",
+        "kcompressd:0",
+        "kcompressd:1",
+        "kcompressd:2",
+        "kcompressd:3"
+      ],
+      "strict": false
+    },
+    "power": {
+      "odpm": true
+    },
+    "vmstat": {
+      "keys": null,
+      "interval_s": 60,
+      "buddyinfo": {
+        "enabled": false,
+        "interval_s": 0
+      }
+    },
+    "trace": {
+      "captures": []
+    },
+    "lock_stat": {
+      "enabled": false
+    }
+  }
+}
