@@ -15,9 +15,9 @@ import sys
 import time
 from typing import Dict, Any, List, Optional
 
-from utils import adb_utils, device_nodes, sysctl_util
+from exp_framework.utils import adb_utils, device_nodes, sysctl_util
 
-from experiment.experiment import Experiment, register
+from exp_framework.experiment.experiment import Experiment, register
 
 GROUPS = ["4k_nokcompressd", "4k_kcompressd",
           "16k_nokcompressd", "16k_kcompressd"]

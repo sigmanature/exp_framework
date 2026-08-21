@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from utils import adb_utils
+from exp_framework.utils import adb_utils
 
 
 def read_node(serial: str, path: str) -> str:

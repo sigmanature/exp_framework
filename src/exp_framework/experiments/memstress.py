@@ -14,9 +14,9 @@ import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Sequence
 
-from utils.adb_utils import adb_shell
+from exp_framework.utils.adb_utils import adb_shell
 
-from experiment.experiment import Experiment, register
+from exp_framework.experiment.experiment import Experiment, register
 
 
 # ---------------- 包/活动解析（memstress 私有） ----------------

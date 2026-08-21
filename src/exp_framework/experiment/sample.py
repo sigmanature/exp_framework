@@ -18,18 +18,18 @@ import threading
 import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Sequence
-from experiment.config import DEFAULT_COUNTERS
-from utils.adb_utils import adb_shell, start_logcat_stream
-from utils import adb_utils
-from utils.buddyinfo_utils import buddyinfo_sample_loop
-from utils.crash_signature import TargetCrashSignatureDetector
-from utils.lockstat_utils import (capture_lock_stat, lock_stat_delta,
+from exp_framework.experiment.config import DEFAULT_COUNTERS
+from exp_framework.utils.adb_utils import adb_shell, start_logcat_stream
+from exp_framework.utils import adb_utils
+from exp_framework.utils.buddyinfo_utils import buddyinfo_sample_loop
+from exp_framework.utils.crash_signature import TargetCrashSignatureDetector
+from exp_framework.utils.lockstat_utils import (capture_lock_stat, lock_stat_delta,
                                   read_lock_stat)
-from utils.sampling_utils import (DEFAULT_STATS_DIR, run_derive_metrics,
+from exp_framework.utils.sampling_utils import (DEFAULT_STATS_DIR, run_derive_metrics,
                                   sample_loop)
-from utils.trace_utils import (validate_events, deploy_trace_probe,
+from exp_framework.utils.trace_utils import (validate_events, deploy_trace_probe,
                                start_trace_probe, stop_trace_probe)
-from utils.vmstat_utils import (derive_vmstat_csv, read_vmstat,
+from exp_framework.utils.vmstat_utils import (derive_vmstat_csv, read_vmstat,
                                 vmstat_sample_loop)
 
 _TASKTIME_DEV = "/data/local/tmp/tasktime"

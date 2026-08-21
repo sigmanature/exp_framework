@@ -16,14 +16,14 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from utils.adb_utils import ensure_adb_works
+from exp_framework.utils.adb_utils import ensure_adb_works
 
-import experiments  # noqa: F401  (注册后端副作用)
-from experiment.experiment import create_experiment
-from experiment.config import (load_config, backend_from_config,
+import exp_framework.experiments  # noqa: F401  (注册后端副作用)
+from exp_framework.experiment.experiment import create_experiment
+from exp_framework.experiment.config import (load_config, backend_from_config,
                                new_run_manifest, write_run_manifest,
                                resolve_sample_config)
-from experiment.sample import sample_start, sample_end
+from exp_framework.experiment.sample import sample_start, sample_end
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:

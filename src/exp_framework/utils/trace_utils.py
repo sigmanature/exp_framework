@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from utils import adb_utils
+from exp_framework.utils import adb_utils
 
 PROBE_DIR = "/data/local/tmp/trace_capture"
 PROBE_SCRIPT = f"{PROBE_DIR}/probe.sh"

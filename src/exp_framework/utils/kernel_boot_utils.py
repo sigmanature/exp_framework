@@ -19,8 +19,8 @@ import subprocess
 import tempfile
 from typing import Any, Dict, List
 
-from utils import adb_utils
-from utils import device_nodes
+from exp_framework.utils import adb_utils
+from exp_framework.utils import device_nodes
 
 AOSP_HOST_BIN = "/home/nzzhao/learn_os/android17/out/host/linux-x86/bin"
 DUMP_PATH = "/data/local/tmp/vb_dump.img"

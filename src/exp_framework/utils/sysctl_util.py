@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from utils import device_nodes
+from exp_framework.utils import device_nodes
 
 
 def _match(actual: str, expected: str) -> bool:

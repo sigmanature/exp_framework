@@ -5,10 +5,10 @@ import unittest
 from pathlib import Path
 
 
-SKILL_SCRIPTS = Path("/home/nzzhao/.agents/skills/exp_framework/scripts")
-sys.path.insert(0, str(SKILL_SCRIPTS))
+SRC = Path(__file__).resolve().parents[1] / "src"
+sys.path.insert(0, str(SRC))
 
-from utils.crash_signature import TargetCrashSignatureDetector
+from exp_framework.utils.crash_signature import TargetCrashSignatureDetector
 
 
 def _feed(detector: TargetCrashSignatureDetector, lines: list[str]):

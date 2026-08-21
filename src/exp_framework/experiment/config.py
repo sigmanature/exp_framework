@@ -27,7 +27,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-from utils.config_utils import deep_merge
+from exp_framework.utils.config_utils import deep_merge
 
 DEFAULT_COUNTERS = (
     "anon_fault_alloc", "anon_fault_fallback", "anon_fault_fallback_charge",

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from experiment.sample import resolve_tasktime_targets
+from exp_framework.experiment.sample import resolve_tasktime_targets
 
 
 def verify(config: Dict[str, Any]) -> List[Dict[str, Any]]:

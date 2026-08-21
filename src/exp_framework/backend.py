@@ -16,12 +16,12 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from utils import pkg_utils  # noqa: E402
-from utils import sysctl_util  # noqa: E402
-from utils import tasktime_utils  # noqa: E402
-from utils import kernel_boot_utils  # noqa: E402
-from utils import trace_utils  # noqa: E402
-from utils import vmstat_utils  # noqa: E402
+from exp_framework.utils import pkg_utils  # noqa: E402
+from exp_framework.utils import sysctl_util  # noqa: E402
+from exp_framework.utils import tasktime_utils  # noqa: E402
+from exp_framework.utils import kernel_boot_utils  # noqa: E402
+from exp_framework.utils import trace_utils  # noqa: E402
+from exp_framework.utils import vmstat_utils  # noqa: E402
 
 BACKEND: Dict[str, Any] = {
     "name": "memstress",

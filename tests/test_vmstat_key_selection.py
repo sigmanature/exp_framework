@@ -12,10 +12,10 @@ from pathlib import Path
 from unittest import mock
 
 
-SKILL_SCRIPTS = Path("/home/nzzhao/.agents/skills/exp_framework/scripts")
-sys.path.insert(0, str(SKILL_SCRIPTS))
+SRC = Path(__file__).resolve().parents[1] / "src"
+sys.path.insert(0, str(SRC))
 
-from order0_fragment_sampler import (  # noqa: E402
+from exp_framework.order0_fragment_sampler import (  # noqa: E402
     _parse_vmstat_patterns,
     flatten_vmstat_keys,
     select_vmstat_keys,
@@ -207,9 +207,9 @@ class CollectIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             stderr = io.StringIO()
             with mock.patch.dict(os.environ, {"VMSTAT_KEY_PATTERNS": "pgdemote_*"}):
-                with mock.patch("order0_fragment_sampler.sample_once", fake_sample_once):
-                    with mock.patch("order0_fragment_sampler.SamplerState", state_factory):
-                        with mock.patch("order0_fragment_sampler.signal.signal", lambda *a: None):
+                with mock.patch("exp_framework.order0_fragment_sampler.sample_once", fake_sample_once):
+                    with mock.patch("exp_framework.order0_fragment_sampler.SamplerState", state_factory):
+                        with mock.patch("exp_framework.order0_fragment_sampler.signal.signal", lambda *a: None):
                             with contextlib.redirect_stderr(stderr):
                                 collect(_collect_args(tmpdir))
             log = stderr.getvalue()

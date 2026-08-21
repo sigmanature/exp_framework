@@ -16,10 +16,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-SKILL_SCRIPTS = Path("/home/nzzhao/.agents/skills/exp_framework/scripts")
-sys.path.insert(0, str(SKILL_SCRIPTS))
+SRC = Path(__file__).resolve().parents[1] / "src"
+sys.path.insert(0, str(SRC))
 
-from utils.device_prep import cleanup_after_boot  # noqa: E402
+from exp_framework.utils.device_prep import cleanup_after_boot  # noqa: E402
 
 SERIAL = os.environ.get("FOLIO_S", "21121FDF600C4G")
 
