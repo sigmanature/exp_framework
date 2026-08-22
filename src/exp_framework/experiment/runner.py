@@ -194,12 +194,26 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
             run_exc = exc
         raise
     finally:
-        _finish_with_lock(serial, out_dir, sample_cfg, manifest["config"],
-                          args, sess, backend,
-                          domain, exp_id,
-                          heartbeat_stop,
-                          stopped=stop_event.is_set(),
-                          run_exc=run_exc)
+        try:
+            _finish_with_lock(serial, out_dir, sample_cfg, manifest["config"],
+                              args, sess, backend,
+                              domain, exp_id,
+                              heartbeat_stop,
+                              stopped=stop_event.is_set(),
+                              run_exc=run_exc)
+        except BaseException as exc2:
+            # 最后兜底：收尾函数自身崩溃（参数错误/内部异常）也必须释放锁，
+            # 否则游标卡 running 导致设备永久不可用（只能人工 clean）。
+            print(f"[{serial}] _finish_with_lock failed: {exc2}",
+                  file=sys.stderr)
+            try:
+                exp_lock_release(domain, serial, exp_id, "failed",
+                                 f"finish_with_lock crashed: {exc2}")
+                print(f"[{serial}] exp_lock: forced release(failed)",
+                      file=sys.stderr)
+            except Exception as exc3:
+                print(f"[{serial}] forced exp_lock release failed, "
+                      f"需人工 exp_lock_clean: {exc3}", file=sys.stderr)
         _ACTIVE_BACKEND = None
 
     # 7) manifest 收尾
