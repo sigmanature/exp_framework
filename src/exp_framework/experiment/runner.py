@@ -19,9 +19,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from exp_framework.utils.adb_utils import ensure_adb_works
+from exp_framework.utils.device_prep import ensure_zram
 from exp_framework.utils.exp_lock import (exp_lock_claim, exp_lock_heartbeat,
                                           exp_lock_mark_cleanup_failed,
                                           exp_lock_release)
+from exp_framework.utils.sysctl_util import verify as sysctl_verify
 
 import exp_framework.backend  # noqa: F401  (注册后端副作用)
 from exp_framework.experiment.experiment import create_experiment
@@ -170,6 +172,19 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
         private_fields = backend.prepare()
         if private_fields:
             manifest.update(private_fields)
+            write_run_manifest(manifest, manifest_path)
+
+        # 4b) 框架级内核参数设置+自检（所有后端通用；配置未要求则 noop）
+        #     sysctl_nodes：设置+回读自检，MISMATCH 即 fail-fast
+        #     zram：sysctl_nodes 含 zram 节点时确保 swap 启用
+        sysctl_nodes = global_cfg.get("sysctl_nodes") or []
+        if sysctl_nodes:
+            sysctl_results = sysctl_verify(global_cfg)
+            bad = [r["param"] for r in sysctl_results if not r["ok"]]
+            if bad:
+                raise RuntimeError(f"sysctl verify failed: {bad}")
+            if any("zram" in n.get("path", "") for n in sysctl_nodes):
+                ensure_zram(serial)
             write_run_manifest(manifest, manifest_path)
 
         # 5) sample_start（sample_config = 模板 + manifest 差异 深合并；合成结果写入清单）

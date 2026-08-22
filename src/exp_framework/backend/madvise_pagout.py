@@ -2,7 +2,7 @@
 
 框架职责：设备准备编排（ensure_awake）、tasktime/odpm/vmstat 采样、
 信号清理、manifest 归档（sample_config 驱动）。
-本后端职责：锁 max 覆盖、冷却、组参数设置与自检（sysctl_util.verify 一行）、
+本后端职责：锁 max 覆盖、冷却（组参数设置与自检由 runner 通用逻辑承担）、
 绑核 bench 循环、order2 采样、收尾等待（kcompressd 稳定双判据）、tsv 产物。
 
 用法：python3 -m experiment.runner --serial <s> \\
@@ -15,7 +15,7 @@ import sys
 import time
 from typing import Dict, Any, List, Optional
 
-from exp_framework.utils import adb_utils, device_nodes, sysctl_util
+from exp_framework.utils import adb_utils, device_nodes
 
 from exp_framework.experiment.experiment import Experiment, register
 
@@ -57,16 +57,8 @@ class MadvisePagout(Experiment):
         # 1) 锁 max（与历史实验一致：scaling_min = scaling_max，8 核）
         self._lock_max()
 
-        # 2) 节点设置+回读+自检：一行，全走框架（config 里已配 exp_ctx + sysctl_nodes，
-        #    每个组一份配置文件，组旋钮期望值已在文件里写死）
-        results = sysctl_util.verify(self.global_config)
-        if any(not r["ok"] for r in results):
-            raise RuntimeError("sysctl verify failed: "
-                               + str([r["param"] for r in results if not r["ok"]]))
-
-        # 3) zram swap 确保启用（verify 只写了 disksize，swapon 是命令需单独做；
-        #    重启后 swap off 会导致 bench MADV_PAGEOUT 无空间、orig_delta=0）
-        self._ensure_zram()
+        # 2) 节点设置+回读+自检 + zram：框架级通用逻辑（runner 4b 步骤），
+        #    后端不再自行调用（sysctl_nodes 配置驱动，未配置则 noop）
 
         # 3) bench 编译推送
         self._build_and_push_bench()
@@ -116,20 +108,6 @@ class MadvisePagout(Experiment):
         return {"rounds_done": rounds_done, "tsv": str(tsv)}
 
     # ---------------- 工具 ----------------
-
-    def _ensure_zram(self) -> None:
-        swaps = adb_utils.adb_shell_root(
-            self.serial, "grep zram0 /proc/swaps", timeout_s=15, check=False)
-        if "zram0" in swaps:
-            return
-        for c in ("echo 8G > /sys/block/zram0/disksize",
-                  "mkswap /dev/block/zram0",
-                  "swapon -p 100 /dev/block/zram0"):
-            adb_utils.adb_shell_root(self.serial, c, timeout_s=30, check=False)
-        got = adb_utils.adb_shell_root(
-            self.serial, "grep zram0 /proc/swaps", timeout_s=15, check=False)
-        if "zram0" not in got:
-            raise RuntimeError("zram swap 启用失败")
 
     def _lock_max(self) -> None:
         # 锁频目标（默认锁 max）：锁频前先读每核原始 scaling_max_freq（未锁时

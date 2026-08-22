@@ -77,6 +77,26 @@ LOCK_FREQ_UNLOCK_CMD = (
     "done")
 
 
+def ensure_zram(serial: str) -> None:
+    """确保 zram swap 启用（框架级通用逻辑，sysctl_nodes 含 zram 节点时调用）。
+
+    重启后 swap off 会导致 MADV_PAGEOUT/swap 相关实验无空间、orig_delta=0；
+    disksize 由 sysctl_nodes 的 zram_disksize 节点设置（verify），本函数只做
+    检查 + mkswap + swapon。
+    """
+    swaps = adb_utils.adb_shell_root(
+        serial, "grep zram0 /proc/swaps", timeout_s=15, check=False)
+    if "zram0" in swaps:
+        return
+    for c in ("mkswap /dev/block/zram0",
+              "swapon -p 100 /dev/block/zram0"):
+        adb_utils.adb_shell_root(serial, c, timeout_s=30, check=False)
+    got = adb_utils.adb_shell_root(
+        serial, "grep zram0 /proc/swaps", timeout_s=15, check=False)
+    if "zram0" not in got:
+        raise RuntimeError("zram swap 启用失败")
+
+
 def cleanup_after_boot(serial: str, wait_after_boot_s: int = 90,
                        stop_event=None, fresh_boot_uptime_s: int = 300) -> dict:
     """Best-effort boot cleanup before a workload:
