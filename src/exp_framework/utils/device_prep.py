@@ -34,10 +34,14 @@ COOLDOWN_ZONES = {
     "thermal_zone3": 55.0,   # G3D (GPU)
     "thermal_zone25": 40.0,  # battery
 }
-# 皮肤温度安全阈值（zone16=quiet_therm，VIRTUAL-SKIN 55°C 关机红线，留 10°C 余量）。
+# 皮肤温度安全阈值（VIRTUAL-SKIN 55°C 关机红线，留 15°C 余量）。
 # CPU 判据会"假达标"（CPU 降得快、机身热容降得慢——连续实验轮间机身蓄热
-# 累积，R4 冷却中皮肤过 55°C 热关机）；皮肤 < 45°C 是达标必要条件。
-SKIN_SAFE_C = 45.0
+# 累积）；VIRTUAL-SKIN = MAXIMUM(qi_therm/usb_pwr_therm2/disp_therm/
+# gnss_tcxo_therm/quiet_therm/battery 的加权平均)——R5 教训：quiet_therm 44.8°C
+# 仍热关机，合成源之一过 55°C。冷却达标 = 全部皮肤合成源 ≤ 40°C（保守留余量）。
+SKIN_SAFE_C = 40.0
+SKIN_SOURCE_ZONES = ["thermal_zone16", "thermal_zone17", "thermal_zone19",
+                     "thermal_zone20", "thermal_zone22"]
 PLATEAU_DELTA_C = 1.0        # plateau: delta T <= 1C between samples
 PLATEAU_SAMPLES = 3          # consecutive samples for plateau/abs-stable
 PLATEAU_MAX_C = 65.0         # plateau balance temperature upper bound
@@ -191,15 +195,17 @@ def wait_for_cool_down(
         zones = list(COOLDOWN_ZONES.keys())
     if max_temps is None:
         max_temps = dict(COOLDOWN_ZONES)
-    # 皮肤温度（zone16=quiet_therm，VIRTUAL-SKIN 55°C 关机红线代理）：
-    # ① 日志必须带它（机身蓄热传导会让皮肤在冷却期间继续升，
+    # 皮肤/机身温度（VIRTUAL-SKIN 合成源，55°C 关机红线代理）：
+    # ① 日志必须带它们（机身蓄热传导会让皮肤在冷却期间继续升，
     #    R4 冷却中热关机教训：CPU 已锁 min 但皮肤过 55°C）
-    # ② 达标必要条件：皮肤 < SKIN_SAFE_C（CPU 判据会假达标——CPU 降得快
-    #    机身热容降得慢，连续实验轮间蓄热累积）
-    if "thermal_zone16" not in zones:
-        zones = zones + ["thermal_zone16"]
-    if "thermal_zone16" not in max_temps:
-        max_temps["thermal_zone16"] = SKIN_SAFE_C
+    # ② 达标必要条件：全部合成源 ≤ SKIN_SAFE_C（CPU 判据会假达标——
+    #    CPU 降得快机身热容降得慢；R5 教训：quiet_therm 44.8 仍关机，
+    #    单源监控低估红线，必须覆盖 qi/usb/disp/gnss 全部源）
+    for z in SKIN_SOURCE_ZONES:
+        if z not in zones:
+            zones = zones + [z]
+    for z in SKIN_SOURCE_ZONES:
+        max_temps.setdefault(z, SKIN_SAFE_C)
     t0 = time.time()
     stable_abs = 0
     prev_temps = None
