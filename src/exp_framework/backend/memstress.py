@@ -721,3 +721,11 @@ class Memstress(Experiment):
 
     def cleanup(self) -> None:
         self.stop_device()
+        # 解除 global_freq_lock（prepare 阶段锁的 80%），恢复设备自由调频
+        try:
+            from exp_framework.utils.device_prep import LOCK_FREQ_UNLOCK_CMD
+            from exp_framework.utils import adb_utils
+            adb_utils.adb_shell_root(self.serial, LOCK_FREQ_UNLOCK_CMD,
+                                     timeout_s=10, check=False)
+        except Exception:
+            pass

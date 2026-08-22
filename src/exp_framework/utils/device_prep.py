@@ -40,19 +40,32 @@ PLATEAU_MAX_C = 65.0         # plateau balance temperature upper bound
 COOLDOWN_TIMEOUT_S = 600
 FRAMEWORK_READY_TIMEOUT_S = 180
 
-# 锁频 ~80% of max（全部 3 个 cluster；就近可用 OPP：77.7% / 81.5% / 80.4%）
+# 锁频 ~80% of max（全部 3 个 cluster；就近可用 OPP：77.7% / 81.5% / 80.4%）。
+# 通过内核 global_freq_lock 锁定（屏蔽一切其他频率设置源）：
+# 写 cpuN/cpufreq/global_freq_lock = 锁定值（kHz），写 0 解除。
+GFL = "/sys/devices/system/cpu/cpu$i/cpufreq/global_freq_lock"
+
 LOCK_FREQ_80PCT_CMD = (
     "for i in 0 1 2 3; do "
-    "echo 1401000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_min_freq 2>/dev/null; "
-    "echo 1401000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_max_freq 2>/dev/null; "
+    f"echo 1401000 > {GFL} 2>/dev/null; "
     "done; "
     "for i in 4 5; do "
-    "echo 1836000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_min_freq 2>/dev/null; "
-    "echo 1836000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_max_freq 2>/dev/null; "
+    f"echo 1836000 > {GFL} 2>/dev/null; "
     "done; "
     "for i in 6 7; do "
-    "echo 2252000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_min_freq 2>/dev/null; "
-    "echo 2252000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_max_freq 2>/dev/null; "
+    f"echo 2252000 > {GFL} 2>/dev/null; "
+    "done")
+
+# 冷却最低频：framework-stop 后锁 cpuinfo_min（300000kHz），空转降温最快
+LOCK_FREQ_MIN_CMD = (
+    "for i in 0 1 2 3 4 5 6 7; do "
+    f"echo 300000 > {GFL} 2>/dev/null; "
+    "done")
+
+# 解除频率锁（实验结束/解锁场景）
+LOCK_FREQ_UNLOCK_CMD = (
+    "for i in 0 1 2 3 4 5 6 7; do "
+    f"echo 0 > {GFL} 2>/dev/null; "
     "done")
 
 
@@ -217,16 +230,22 @@ def cool_down_with_framework_stop(
     _log("[framework_stop] adb shell stop")
     adb_utils.adb_shell_root(serial, "stop", timeout_s=15, check=False)
 
-    # 2) 冷却（最低频空转）
+    # 2) 锁最低频（global_freq_lock = 300000kHz）：framework 已停 + CPU 锁最低频，
+    #    空转降温最快（内核锁屏蔽一切其他频率设置源）
+    _log("[lock_cpu_freq_min] global_freq_lock=300000")
+    adb_utils.adb_shell_root(serial, LOCK_FREQ_MIN_CMD, timeout_s=10,
+                             tty=True, check=False)
+
+    # 3) 冷却（最低频空转）
     temps = wait_for_cool_down(serial, stop_event=stop_event,
                                max_wait_s=max_wait_s)
 
-    # 3) 锁频 80%（冷却后锁，保证实验起始温度 = 锁频态真实温度）
-    _log("[lock_cpu_freq_80pct] (after cooldown)")
+    # 4) 锁频 80%（冷却后锁，保证实验起始温度 = 锁频态真实温度）
+    _log("[lock_cpu_freq_80pct] global_freq_lock=1401/1836/2252MHz")
     adb_utils.adb_shell_root(serial, LOCK_FREQ_80PCT_CMD, timeout_s=10,
                              tty=True, check=False)
 
-    # 4) 拉起 framework 并等待就绪（就绪判定写死：activity 服务可达）
+    # 5) 拉起 framework 并等待就绪（就绪判定写死：activity 服务可达）
     _log("[framework_start] adb shell start")
     adb_utils.adb_shell_root(serial, "start", timeout_s=15, check=False)
     deadline = time.monotonic() + FRAMEWORK_READY_TIMEOUT_S

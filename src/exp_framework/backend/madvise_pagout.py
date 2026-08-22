@@ -134,6 +134,8 @@ class MadvisePagout(Experiment):
     def _lock_max(self) -> None:
         # 锁频目标（默认锁 max）：锁频前先读每核原始 scaling_max_freq（未锁时
         # 即为该核硬件最大频率）作为目标，整段实验频率固定不变。
+        # 通过内核 global_freq_lock 锁定（屏蔽一切其他频率设置源）：
+        # 写 cpuN/cpufreq/global_freq_lock = 锁定值（kHz），写 0 解除。
         # 注意：锁 max 可能触发用户态 thermal HAL 压频（BIG 2802→1745MHz），
         # 温度冲高时测量分段会劣化；若需保守档位，用 backend_config["lock_freq"]
         # = {"little": kHz, "mid": kHz, "big": kHz} 覆盖。
@@ -150,8 +152,7 @@ class MadvisePagout(Experiment):
                 target.append(int(max(set(raw), key=raw.count)))
         for i, freq in enumerate(target):
             p = f"/sys/devices/system/cpu/cpu{i}/cpufreq"
-            device_nodes.set_node(self.serial, p + "/scaling_max_freq", freq)
-            device_nodes.set_node(self.serial, p + "/scaling_min_freq", freq)
+            device_nodes.set_node(self.serial, p + "/global_freq_lock", freq)
 
         # 自检（adb 读偶发脏值：每核读 3 次取多数值）
         def read_majority(path: str) -> str:
@@ -160,10 +161,10 @@ class MadvisePagout(Experiment):
             return max(set(vals), key=vals.count)
 
         ok = all(
-            read_majority(f"/sys/devices/system/cpu/cpu{i}/cpufreq/scaling_min_freq")
-            == read_majority(f"/sys/devices/system/cpu/cpu{i}/cpufreq/scaling_max_freq")
+            read_majority(f"/sys/devices/system/cpu/cpu{i}/cpufreq/global_freq_lock")
+            == str(target[i])
             for i in range(8))
-        print(f"[{self.serial}] lock_cpu_freq min==max: {ok} "
+        print(f"[{self.serial}] lock_cpu_freq global_freq_lock: {ok} "
               f"target={target}", file=sys.stderr)
 
         # 防热降频（内核侧）：CPU zone passive trip 提到 115°C（shutdown 保留）
