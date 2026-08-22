@@ -69,19 +69,16 @@
     "power": {
       "odpm": true
     },
-    "vmstat": {
-      "keys": null,
-      "interval_s": 60,
-      "buddyinfo": {
-        "enabled": false,
-        "interval_s": 0
-      }
-    },
     "trace": {
       "captures": []
     },
     "lock_stat": {
       "enabled": false
+    },
+    "cycle_sample": {
+      "vmstat": {
+        "interval_s": 60
+      }
     }
   }
 }

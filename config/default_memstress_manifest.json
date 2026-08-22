@@ -139,11 +139,9 @@
   "samples": null,
   "sample_errors": null,
   "sample_config": {
-    "vmstat": {
-      "interval_s": 10,
-      "buddyinfo": {
-        "enabled": false,
-        "interval_s": 0
+    "cycle_sample": {
+      "vmstat": {
+        "interval_s": 10
       }
     }
   }

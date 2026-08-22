@@ -113,8 +113,10 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
         manifest.update(private_fields)
         write_run_manifest(manifest, manifest_path)
 
-    # 4) sample_start
+    # 4) sample_start（sample_config = 模板 + manifest 差异 深合并；合成结果写入清单）
     sample_cfg = resolve_sample_config(manifest.get("sample_config", {}))
+    manifest["sample_config"] = sample_cfg
+    write_run_manifest(manifest, manifest_path)
     resolved_pkgs = list((private_fields or {}).get("packages_resolved", {}).keys())
     sess = sample_start(serial, out_dir, sample_cfg, manifest["config"],
                         args, stop_event, resolved_pkgs=resolved_pkgs)

@@ -18,19 +18,17 @@ import threading
 import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Sequence
-from exp_framework.experiment.config import DEFAULT_COUNTERS
+from exp_framework.experiment.config import load_default_sample_config
 from exp_framework.utils.adb_utils import adb_shell, start_logcat_stream
 from exp_framework.utils import adb_utils
-from exp_framework.utils.buddyinfo_utils import buddyinfo_sample_loop
 from exp_framework.utils.crash_signature import TargetCrashSignatureDetector
+from exp_framework.utils.cycle_sample import start_cycle_samplers
 from exp_framework.utils.lockstat_utils import (capture_lock_stat, lock_stat_delta,
                                   read_lock_stat)
-from exp_framework.utils.sampling_utils import (DEFAULT_STATS_DIR, run_derive_metrics,
-                                  sample_loop)
+from exp_framework.utils.sampling_utils import (run_derive_metrics,)
 from exp_framework.utils.trace_utils import (validate_events, deploy_trace_probe,
                                start_trace_probe, stop_trace_probe)
-from exp_framework.utils.vmstat_utils import (derive_vmstat_csv, read_vmstat,
-                                vmstat_sample_loop)
+from exp_framework.utils.vmstat_utils import (derive_vmstat_csv, read_vmstat)
 
 _TASKTIME_DEV = "/data/local/tmp/tasktime"
 _TASKTIME_OUT = "/data/local/tmp/tasktime_out.txt"
@@ -322,17 +320,8 @@ def sample_start(serial: str, out_dir: Path, sample_cfg: Dict[str, Any],
     resolved_pkgs：后端 prepare 解析出的包名（用于 crash 检测），可空。
     """
     sess = SampleSession()
-    counters_raw = global_cfg.get("counters", "")
-    if isinstance(counters_raw, str):
-        counters_raw = counters_raw.split(",")
-    counters = [c.strip() for c in counters_raw if c.strip()] or list(DEFAULT_COUNTERS)
-    interval_s = max(1, int(global_cfg.get("interval_s",
-                                           getattr(args, "interval_s", 60))))
-    vmstat_cfg = sample_cfg.get("vmstat", {}) or {}
-    vmstat_interval_s = int(vmstat_cfg.get("interval_s", 60))
-    buddyinfo_cfg = vmstat_cfg.get("buddyinfo", {}) or {}
-    buddyinfo_enabled = bool(buddyinfo_cfg.get("enabled", False))
-    buddyinfo_interval = int(buddyinfo_cfg.get("interval_s", 0))
+    cycle_cfg = sample_cfg.get("cycle_sample", {}) or {}
+    vmstat_cfg = cycle_cfg.get("vmstat", {}) or {}
     sess.vmstat_keys = vmstat_cfg.get("keys") or None
     lock_stat_enabled = bool(sample_cfg.get("lock_stat", {}).get("enabled", False))
     odpm_enabled = bool(sample_cfg.get("power", {}).get("odpm", False))
@@ -418,49 +407,17 @@ def sample_start(serial: str, out_dir: Path, sample_cfg: Dict[str, Any],
         sess.lock_stat_start_text = capture_lock_stat(
             serial, out_dir / "lock_stat_start.txt")
 
-    # ---- 采样线程 ----
+    # ---- cycle_sample 周期采样（统一管理器，按配置启停）----
     local_stop = threading.Event()
     combined_stop = StopEvent()
     combined_stop.add(stop_event)
     combined_stop.add(local_stop)
     sess.combined_stop = combined_stop
 
-    def _sampler():
-        try:
-            n, nerr = sample_loop(
-                serial=serial, stats_dir=DEFAULT_STATS_DIR, counters=counters,
-                interval_s=interval_s,
-                out_csv=out_dir / "raw_samples.csv",
-                retries=2, retry_sleep_s=2, stop_event=combined_stop)
-            sess.sampling_result = {"samples": n, "errors": nerr}
-        except Exception as e:
-            print(f"[{serial}] sampler error: {e}", file=sys.stderr)
-            combined_stop.set()
-
-    sess.sampler_thread = threading.Thread(target=_sampler,
-                                           name=f"sampler_{serial}",
-                                           daemon=True)
-    sess.sampler_thread.start()
-
-    if buddyinfo_enabled and buddyinfo_interval > 0:
-        t = threading.Thread(
-            target=buddyinfo_sample_loop,
-            kwargs={"serial": serial, "out_csv": out_dir / "buddyinfo_samples.csv",
-                    "interval_s": buddyinfo_interval,
-                    "stop_event": combined_stop},
-            name=f"buddyinfo_{serial}", daemon=True)
-        t.start()
-        sess.threads.append(t)
-
-    if int(vmstat_interval_s) > 0:
-        t = threading.Thread(
-            target=vmstat_sample_loop,
-            kwargs={"serial": serial, "out_csv": out_dir / "vmstat_samples.csv",
-                    "interval_s": vmstat_interval_s,
-                    "stop_event": combined_stop, "keys": sess.vmstat_keys},
-            name=f"vmstat_{serial}", daemon=True)
-        t.start()
-        sess.threads.append(t)
+    sess.cycle_sample_result: Dict = {}
+    sess.threads.extend(start_cycle_samplers(
+        serial, out_dir, cycle_cfg, combined_stop,
+        result_sink=sess.cycle_sample_result))
 
     # ---- crash 检测 + logcat ----
     if not getattr(args, "no_crash_detect", False) and resolved_pkgs:
@@ -489,12 +446,18 @@ def sample_end(serial: str, out_dir: Path, sample_cfg: Dict[str, Any],
                sess: SampleSession) -> None:
     """停止全部采样设施并推导产物。必须在 backend.run() 之后（含异常路径）。"""
 
-    # 先停采样线程（buddyinfo/vmstat/sampler）：combined_stop 置位后自然退出
+    # 先停采样线程（cycle_sample 各域）：combined_stop 置位后自然退出
     if sess.combined_stop is not None:
         sess.combined_stop.set()
     for t in [sess.sampler_thread] + list(sess.threads):
         if t is not None:
             t.join(timeout=10)
+
+    # counters 采样结果回写（原始 (num, err) 或 None）
+    counters_result = getattr(sess, "cycle_sample_result", {}).get("counters")
+    if isinstance(counters_result, tuple) and len(counters_result) == 2:
+        sess.sampling_result = {"samples": counters_result[0],
+                                "errors": counters_result[1]}
 
     if sess.logcat_handle:
         try:

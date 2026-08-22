@@ -149,33 +149,17 @@
     "lock_stat": {
       "enabled": false
     },
-    "vmstat": {
-      "keys": [
-        "allocstall_normal",
-        "allocstall_movable",
-        "alloc_stall_wmark",
-        "alloc_stall_fragment",
-        "pgsteal_order0_kswapd",
-        "pgsteal_order2_kswapd",
-        "pgsteal_order2_direct",
-        "compact_stall",
-        "file_alloc_order0_total",
-        "file_alloc_order2_total",
-        "vma_anon_alloc_order0_total",
-        "vma_anon_alloc_order2_total",
-        "pgscan_anon",
-        "pgscan_file",
-        "pgsteal_anon",
-        "pgsteal_file"
-      ],
-      "buddyinfo": {
-        "interval_s": 60,
-        "enabled": true
-      },
-      "interval_s": 60
-    },
     "power": {
       "odpm": true
+    },
+    "cycle_sample": {
+      "vmstat": {
+        "interval_s": 10
+      },
+      "buddyinfo": {
+        "enabled": true,
+        "interval_s": 5
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "_template": "compact_daemon experiment: 100 apps, precondition 5000MB, 50 cycles, seed 20260617",
+  "_template": "compact_daemon experiment: 100 apps, precondition 5000MB, 40 cycles, seed 20260617",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
@@ -17,7 +17,7 @@
     "interval_s": 60,
     "use_su": true,
     "no_network_check": true,
-    "max_cycles": 50,
+    "max_cycles": 40,
     "memstress": {
       "packages": [
         "com.chinamworld.main",
@@ -133,8 +133,10 @@
   "samples": null,
   "sample_errors": null,
   "sample_config": {
-    "vmstat": {
-      "interval_s": 10,
+    "cycle_sample": {
+      "vmstat": {
+        "interval_s": 10
+      },
       "buddyinfo": {
         "enabled": true,
         "interval_s": 5

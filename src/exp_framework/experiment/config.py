@@ -4,6 +4,12 @@
   config          输入配置（用户修改的参数），见 config/*.json
   run_manifest.json  运行时清单（框架生成的结果档案，输出到实验目录）
 
+组装模型（Kustomize 式分层合成）：
+  ① 框架默认层  config/default_sample_config.json（采样默认值，含 cycle_sample 各域）
+  ② 实验差异层  manifest 的 sample_config（只写差异，deep_merge 合成）
+  ③ CLI 覆盖    现有 argparse 覆盖（config 层，见 runner._global_overrides）
+  ④ 运行时清单  run_manifest.json（产物：合成后完整配置）
+
 config 顶层结构：
 {
   "serial": "21121FDF600C4G",
@@ -13,15 +19,16 @@ config 顶层结构：
     "backend": {"name": "memstress", "config": { ...后端私有参数... }}
   },
   "sample_config": {
-    "vmstat": {"keys": [...], "interval_s": 60,
-               "buddyinfo": {"enabled": false, "interval_s": 0}},
+    "cycle_sample": {
+      "counters":  {...}, "vmstat": {...}, "buddyinfo": {...},
+      "thermal":   {...}, "cpufreq": {...}
+    },
     "tasktime": {...}, "trace": {...}, "lock_stat": {...}, "power": {...}
   }
 }
 
-采样间隔统一在 sample_config 配置（vmstat.interval_s / vmstat.buddyinfo.interval_s），
-config 层不再有 vmstat_interval_s / buddyinfo_interval_s 字段。
-buddyinfo 属于 vmstat 采样的子项，默认不采集（enabled=false）。
+cycle_sample = 周期采样统一抽象：任何按固定间隔周期采集的样本都是一个子域，
+每个子域独立 enabled/interval_s/字段/输出文件，见 utils/cycle_sample.py。
 """
 import json
 from pathlib import Path
@@ -29,26 +36,18 @@ from typing import Dict, Any, Tuple
 
 from exp_framework.utils.config_utils import deep_merge
 
-DEFAULT_COUNTERS = (
-    "anon_fault_alloc", "anon_fault_fallback", "anon_fault_fallback_charge",
-    "split", "swpin", "swpout", "zswpout",
-)
+_DEFAULT_SAMPLE_CONFIG_PATH = (
+    Path(__file__).resolve().parents[3] / "config" / "default_sample_config.json")
 
-# ---- 采样配置默认值（sample_config 各域 schema）----
 
-DEFAULT_SAMPLE_CONFIG: dict = {
-    "vmstat": {"keys": None, "interval_s": 60,
-               "buddyinfo": {"enabled": False, "interval_s": 0}},
-    "tasktime": {"procs": [], "interval_s": 2, "strict": True},
-    "lock_stat": {"enabled": False},
-    "trace": {"captures": [], "strict": True},
-    "power": {"odpm": False},
-}
+def load_default_sample_config() -> Dict[str, Any]:
+    """读框架默认采样配置模板（default_sample_config.json）。"""
+    return json.loads(_DEFAULT_SAMPLE_CONFIG_PATH.read_text(encoding="utf-8"))
 
 
 def resolve_sample_config(sample_cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """默认值 + 用户 sample_config 深合并（数组/标量整体替换）。"""
-    return deep_merge(DEFAULT_SAMPLE_CONFIG, dict(sample_cfg or {}))
+    """①默认模板 + ②manifest 差异 深合并（数组/标量整体替换）。"""
+    return deep_merge(load_default_sample_config(), dict(sample_cfg or {}))
 
 
 # ---- 配置加载 / backend 解析 ----

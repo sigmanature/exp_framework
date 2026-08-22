@@ -25,7 +25,7 @@ from exp_framework.utils.adb_utils import ensure_adb_works
 from exp_framework.utils.config_utils import deep_merge
 
 from exp_framework.experiment import runner as experiment_runner
-from exp_framework.experiment.config import DEFAULT_COUNTERS
+from exp_framework.experiment.config import load_default_sample_config
 
 
 # === 原 memstress 参数（默认值与模板 config 一致） ===
@@ -33,7 +33,7 @@ from exp_framework.experiment.config import DEFAULT_COUNTERS
 CONFIG = {
     "max_cycles": 1200,
     "interval_s": 60,
-    "counters": list(DEFAULT_COUNTERS),
+    "counters": list(load_default_sample_config()["cycle_sample"]["counters"]["keys"]),
     "no_network_check": True,
     "memstress": {
         "burst_size": 1,

@@ -13,15 +13,6 @@ from . import adb_utils
 
 
 DEFAULT_STATS_DIR = "/sys/kernel/mm/transparent_hugepage/hugepages-16kB/stats"
-DEFAULT_COUNTERS = [
-    "anon_fault_alloc",
-    "anon_fault_fallback",
-    "anon_fault_fallback_charge",
-    "split",
-    "swpin",
-    "swpout",
-    "zswpout",
-]
 
 FOLIO_ALLOC_KEYS = [f"order_{i}" for i in range(16)] + ["folio_large_total", "folio_alloc_total"]
 
