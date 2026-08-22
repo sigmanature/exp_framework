@@ -56,10 +56,13 @@ LOCK_FREQ_80PCT_CMD = (
     f"echo 2252000 > {GFL} 2>/dev/null; "
     "done")
 
-# 冷却最低频：framework-stop 后锁 cpuinfo_min（300000kHz），空转降温最快
+# 冷却最低频：framework-stop 后锁到各核 cpuinfo_min（每 cluster 不同：
+# little=300000 / mid=400000 / big=500000），空转降温最快。
+# 不能写死单一值——store 校验 lock < cpuinfo_min 会 EINVAL。
 LOCK_FREQ_MIN_CMD = (
     "for i in 0 1 2 3 4 5 6 7; do "
-    f"echo 300000 > {GFL} 2>/dev/null; "
+    f"m=$(cat /sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_min_freq 2>/dev/null); "
+    f"[ -n \"$m\" ] && echo $m > {GFL} 2>/dev/null; "
     "done")
 
 # 解除频率锁（实验结束/解锁场景）

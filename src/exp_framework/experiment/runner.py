@@ -196,7 +196,7 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
     finally:
         _finish_with_lock(serial, out_dir, sample_cfg, manifest["config"],
                           args, sess, backend,
-                          domain, serial, exp_id,
+                          domain, exp_id,
                           heartbeat_stop,
                           stopped=stop_event.is_set(),
                           run_exc=run_exc)
