@@ -39,6 +39,10 @@ PLATEAU_SAMPLES = 3          # consecutive samples for plateau/abs-stable
 PLATEAU_MAX_C = 65.0         # plateau balance temperature upper bound
 COOLDOWN_TIMEOUT_S = 600
 FRAMEWORK_READY_TIMEOUT_S = 180
+# framework start 后稳定等待：get-config 可达 ≠ 系统完全就绪，
+# 冷启动多 app（burst）需要 zygote/AMS/PMS 完全稳定，否则偶发启动失败
+# （实测 start 后立刻 am start 报 Can't find service: activity）。
+FRAMEWORK_SETTLE_S = 15
 
 # 锁频 ~80% of max（全部 3 个 cluster；就近可用 OPP：77.7% / 81.5% / 80.4%）。
 # 通过内核 global_freq_lock 锁定（屏蔽一切其他频率设置源）：
@@ -260,8 +264,9 @@ def cool_down_with_framework_stop(
                 serial, "cmd activity get-config >/dev/null 2>&1 && echo ok",
                 timeout_s=15, check=False)
             if "ok" in (out or ""):
-                _log(f"[framework_start] ready (elapsed "
-                     f"{FRAMEWORK_READY_TIMEOUT_S - max(0, deadline - time.monotonic()):.0f}s)")
+                _log(f"[framework_start] ready, settling {FRAMEWORK_SETTLE_S}s "
+                     f"(framework 刚起，冷启动多 app 需系统完全就绪)")
+                sleep_interruptible(stop_event, FRAMEWORK_SETTLE_S)
                 return temps
         except Exception:
             pass
