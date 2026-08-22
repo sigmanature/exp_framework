@@ -32,8 +32,14 @@ def thermal_sample_loop(
     stop_event,
     zones: Optional[Sequence[str]] = None,
 ) -> int:
-    """周期采集热区温度（/sys/class/thermal/<zone>/temp，毫摄氏度转 °C）。"""
-    zones = list(zones or ["thermal_zone0", "thermal_zone2"])
+    """周期采集热区温度（/sys/class/thermal/<zone>/temp，毫摄氏度转 °C）。
+
+    zones 映射（Pixel6 oriole）：thermal_zone0=BIG(大核) / zone1=MID(中核) /
+    zone2=LITTLE(小核) / zone3=G3D(GPU) / zone16=quiet_therm(皮肤温度代理，
+    VIRTUAL-SKIN 合成值近似，55°C 为 thermal HAL 关机红线) /
+    zone25=battery(电池)。默认采 zone16+0+2（皮肤代理+大小核）。
+    """
+    zones = list(zones or ["thermal_zone16", "thermal_zone0", "thermal_zone2"])
     fieldnames = ["host_ts"] + [f"temp_{z.split('_')[-1]}" for z in zones]
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     num = 0

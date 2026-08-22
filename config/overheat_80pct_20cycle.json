@@ -1,5 +1,5 @@
 {
-  "_template": "overheat test: 100 apps, lock 80% freq (device_prep prep_cmd), 20 cycles, thermal+cpufreq sampling, measure temp rise vs 115C trip.",
+  "_template": "overheat test: 100 apps, lock 80% freq (global_freq_lock), 40 cycles (复现热关机边界), thermal(zone16皮肤+CPU/G3D/电池) 2s + cpufreq 2s 采样",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
@@ -127,7 +127,7 @@
         "seed": 20260617,
         "mode": "launch_only",
         "clear_logcat": true,
-        "max_cycles": 20
+        "max_cycles": 40
       }
     },
     "exp_ctx": {
@@ -149,7 +149,15 @@
       },
       "thermal": {
         "enabled": true,
-        "interval_s": 2
+        "interval_s": 2,
+        "zones": [
+          "thermal_zone16",
+          "thermal_zone0",
+          "thermal_zone1",
+          "thermal_zone2",
+          "thermal_zone3",
+          "thermal_zone25"
+        ]
       },
       "cpufreq": {
         "enabled": true,
