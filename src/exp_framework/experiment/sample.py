@@ -178,7 +178,7 @@ def _finish_tasktime(serial: str,
 # ---------------- 通用采样设施 ----------------
 
 class StopEvent:
-    """多线程停止信号，接口与 threading.Event 兼容。"""
+    """多线程停止信号，接口与 threading.Event 兼容（含 wait）。"""
     def __init__(self):
         self._events: List[threading.Event] = []
 
@@ -191,6 +191,26 @@ class StopEvent:
 
     def is_set(self):
         return any(e.is_set() for e in self._events)
+
+    def wait(self, timeout: Optional[float] = None) -> bool:
+        """等待任一子事件置位（返回 True）或超时（返回 False）。
+
+        多 Event 无法 select，用 50ms 轮询切片实现，满足事件化唤醒粒度。
+        """
+        if timeout is not None and timeout <= 0:
+            return self.is_set()
+        deadline = (time.monotonic() + timeout
+                    if timeout is not None else None)
+        while True:
+            if self.is_set():
+                return True
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                time.sleep(min(0.05, remaining))
+            else:
+                time.sleep(0.05)
 
 
 def ensure_network(serial: str):

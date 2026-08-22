@@ -38,6 +38,22 @@ PLATEAU_DELTA_C = 1.0        # plateau: delta T <= 1C between samples
 PLATEAU_SAMPLES = 3          # consecutive samples for plateau/abs-stable
 PLATEAU_MAX_C = 65.0         # plateau balance temperature upper bound
 COOLDOWN_TIMEOUT_S = 600
+FRAMEWORK_READY_TIMEOUT_S = 180
+
+# 锁频 ~80% of max（全部 3 个 cluster；就近可用 OPP：77.7% / 81.5% / 80.4%）
+LOCK_FREQ_80PCT_CMD = (
+    "for i in 0 1 2 3; do "
+    "echo 1401000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_min_freq 2>/dev/null; "
+    "echo 1401000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_max_freq 2>/dev/null; "
+    "done; "
+    "for i in 4 5; do "
+    "echo 1836000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_min_freq 2>/dev/null; "
+    "echo 1836000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_max_freq 2>/dev/null; "
+    "done; "
+    "for i in 6 7; do "
+    "echo 2252000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_min_freq 2>/dev/null; "
+    "echo 2252000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_max_freq 2>/dev/null; "
+    "done")
 
 
 def cleanup_after_boot(serial: str, wait_after_boot_s: int = 90,
@@ -173,6 +189,65 @@ def wait_for_cool_down(
         sleep_interruptible(stop_event, poll_s)
 
 
+def cool_down_with_framework_stop(
+    serial: str,
+    *,
+    stop_event=None,
+    max_wait_s: int = COOLDOWN_TIMEOUT_S,
+    log_path: Optional[Path] = None,
+) -> dict:
+    """自包含加速冷却（memstress 专用路径）：
+
+    adb shell stop（zygote/system_server 全停，CPU 彻底空转）
+      → wait_for_cool_down（最低频空转，降温最快）
+      → 锁频 80%（冷却后锁，实验起始温度真实）
+      → adb shell start（拉起 framework）
+      → 等待就绪（cmd activity get-config 可达，180s 超时失败 raise）。
+    """
+    def _log(msg: str) -> None:
+        print(f"[cool_down] {msg}", flush=True)
+        if log_path is not None:
+            try:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(f"{msg}  {datetime.now().isoformat()}\n")
+            except Exception:
+                pass
+
+    # 1) 停 framework：CPU 无任何用户态负载，空转降温最快
+    _log("[framework_stop] adb shell stop")
+    adb_utils.adb_shell_root(serial, "stop", timeout_s=15, check=False)
+
+    # 2) 冷却（最低频空转）
+    temps = wait_for_cool_down(serial, stop_event=stop_event,
+                               max_wait_s=max_wait_s)
+
+    # 3) 锁频 80%（冷却后锁，保证实验起始温度 = 锁频态真实温度）
+    _log("[lock_cpu_freq_80pct] (after cooldown)")
+    adb_utils.adb_shell_root(serial, LOCK_FREQ_80PCT_CMD, timeout_s=10,
+                             tty=True, check=False)
+
+    # 4) 拉起 framework 并等待就绪（就绪判定写死：activity 服务可达）
+    _log("[framework_start] adb shell start")
+    adb_utils.adb_shell_root(serial, "start", timeout_s=15, check=False)
+    deadline = time.monotonic() + FRAMEWORK_READY_TIMEOUT_S
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            raise RuntimeError("aborted while waiting for framework ready")
+        try:
+            out = adb_utils.adb_shell_root(
+                serial, "cmd activity get-config >/dev/null 2>&1 && echo ok",
+                timeout_s=15, check=False)
+            if "ok" in (out or ""):
+                _log(f"[framework_start] ready (elapsed "
+                     f"{FRAMEWORK_READY_TIMEOUT_S - max(0, deadline - time.monotonic()):.0f}s)")
+                return temps
+        except Exception:
+            pass
+        sleep_interruptible(stop_event, 5)
+    raise RuntimeError("framework did not become ready after adb shell start "
+                       f"({FRAMEWORK_READY_TIMEOUT_S}s)")
+
+
 def is_device_awake(serial: str) -> Tuple[bool, str]:
     try:
         out = adb_shell(serial, "dumpsys power", timeout_s=30, check=True)
@@ -245,26 +320,10 @@ def ensure_awake_unlocked_and_stay_awake(
 
         for prep_cmd, label in (
             ("setenforce 0 2>/dev/null || true", "setenforce 0"),
-            # Lock CPU frequencies to ~80% of max (all 3 clusters; nearest
-            # available OPP per cluster: 77.7% / 81.5% / 80.4%) so the
-            # workload runs at a fixed frequency without tripping thermal
-            # (which would force downclock and break the locked-freq premise).
-            ("for i in 0 1 2 3; do "
-             "echo 1401000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_min_freq 2>/dev/null; "
-             "echo 1401000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_max_freq 2>/dev/null; "
-             "done; "
-             "for i in 4 5; do "
-             "echo 1836000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_min_freq 2>/dev/null; "
-             "echo 1836000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_max_freq 2>/dev/null; "
-             "done; "
-             "for i in 6 7; do "
-             "echo 2252000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_min_freq 2>/dev/null; "
-             "echo 2252000 > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_max_freq 2>/dev/null; "
-             "done", "lock_cpu_freq_80pct"),
             # Disable thermal passive downclocking (kernel cpufreq cooling
             # trips at 80C passive trip on the CPU zones; raise the trip so
             # the locked frequency is never overridden). Hot shutdown trip
-            # stays; mitigated by the 75% lock (lower heat).
+            # stays; mitigated by the 80% lock (lower heat).
             ("echo 115000 > /sys/class/thermal/thermal_zone0/trip_point_2_temp 2>/dev/null || true; "
              "echo 115000 > /sys/class/thermal/thermal_zone1/trip_point_2_temp 2>/dev/null || true; "
              "echo 115000 > /sys/class/thermal/thermal_zone2/trip_point_2_temp 2>/dev/null || true",
@@ -314,21 +373,17 @@ def ensure_awake_unlocked_and_stay_awake(
             f.flush()
             return
 
-        # Cool down AFTER locking frequencies + screen-on prep: this is the
-        # actual experiment condition (all cores at max freq), so the cooldown
-        # result is the temperature the workload really starts from.
-        # 先幂等停掉设备端残留 memstress runner：无负载空转降温更快，
-        # 冷却达标后 start 新一轮负载（连续短测场景关键）。
-        try:
-            adb_utils.adb_shell_root(
-                serial, "touch /data/local/tmp/memstress_stop", timeout_s=5,
-                check=False)
-        except Exception:
-            pass
+        # Cool down: 自包含加速冷却（stop framework → 空转冷却 → 锁频 80% →
+        # start framework → 就绪确认）。锁频在冷却后执行，实验起始温度真实；
+        # 冷却期间 CPU 最低频空转，降温比锁频态快得多。
         f.write(f"[cool_down] start {datetime.now().isoformat()}\n")
-        temps = wait_for_cool_down(serial, stop_event=stop_event)
-        f.write(f"[cool_down] done BIG={temps.get('thermal_zone0', -1):.1f}°C "
-                f"LITTLE={temps.get('thermal_zone2', -1):.1f}°C  "
-                f"{datetime.now().isoformat()}\n")
-        f.flush()
+        temps: dict = {}
+        try:
+            temps = cool_down_with_framework_stop(
+                serial, stop_event=stop_event, log_path=log_path)
+        finally:
+            f.write(f"[cool_down] done BIG={temps.get('thermal_zone0', -1):.1f}°C "
+                    f"LITTLE={temps.get('thermal_zone2', -1):.1f}°C  "
+                    f"{datetime.now().isoformat()}\n")
+            f.flush()
 
