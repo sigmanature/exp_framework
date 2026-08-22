@@ -179,6 +179,10 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
         #     zram：sysctl_nodes 含 zram 节点时确保 swap 启用
         sysctl_nodes = global_cfg.get("sysctl_nodes") or []
         if sysctl_nodes:
+            # verify 从 exp_ctx.serial 读设备号；manifest 可能未声明，
+            # 以 runner 的 serial 参数为准注入
+            gctx = global_cfg.setdefault("exp_ctx", {})
+            gctx.setdefault("serial", serial)
             sysctl_results = sysctl_verify(global_cfg)
             bad = [r["param"] for r in sysctl_results if not r["ok"]]
             if bad:
