@@ -144,29 +144,38 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
                                 out_dir, stop_event)
     _ACTIVE_BACKEND = backend
 
-    # 4) prepare（设备准备 + 后端预检；失败早停，采样不启动）
-    private_fields = backend.prepare()
-    if private_fields:
-        manifest.update(private_fields)
-        write_run_manifest(manifest, manifest_path)
-
-    # 5) sample_start（sample_config = 模板 + manifest 差异 深合并；合成结果写入清单）
-    sample_cfg = resolve_sample_config(manifest.get("sample_config", {}))
-    manifest["sample_config"] = sample_cfg
-    write_run_manifest(manifest, manifest_path)
-    resolved_pkgs = list((private_fields or {}).get("packages_resolved", {}).keys())
-    sess = sample_start(serial, out_dir, sample_cfg, manifest["config"],
-                        args, stop_event, resolved_pkgs=resolved_pkgs)
-
-    # 6) backend.run + 收尾（finally 保证：cleanup → 状态机更新）
-    backend_result: Dict[str, Any] = {}
+    # 4-6) prepare → sample_start → run；任何失败（含 prepare/sample_start）
+    #      都走统一收尾 _finish_with_lock（保证游标状态机自洽）
+    sample_cfg: Dict[str, Any] = {}
+    sess = None
     run_exc: Optional[BaseException] = None
     try:
-        backend_result = backend.run() or {}
-        if backend_result:
-            manifest.update(backend_result)
+        # 4) prepare（设备准备 + 后端预检；失败早停，采样不启动）
+        private_fields = backend.prepare()
+        if private_fields:
+            manifest.update(private_fields)
+            write_run_manifest(manifest, manifest_path)
+
+        # 5) sample_start（sample_config = 模板 + manifest 差异 深合并；合成结果写入清单）
+        sample_cfg = resolve_sample_config(manifest.get("sample_config", {}))
+        manifest["sample_config"] = sample_cfg
+        write_run_manifest(manifest, manifest_path)
+        resolved_pkgs = list((private_fields or {}).get("packages_resolved", {}).keys())
+        sess = sample_start(serial, out_dir, sample_cfg, manifest["config"],
+                            args, stop_event, resolved_pkgs=resolved_pkgs)
+
+        # 6) backend.run
+        backend_result: Dict[str, Any] = {}
+        try:
+            backend_result = backend.run() or {}
+            if backend_result:
+                manifest.update(backend_result)
+        except BaseException as exc:
+            run_exc = exc
+            raise
     except BaseException as exc:
-        run_exc = exc
+        if run_exc is None:
+            run_exc = exc
         raise
     finally:
         _finish_with_lock(serial, out_dir, sample_cfg, manifest["config"],
@@ -180,8 +189,9 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
     # 7) manifest 收尾
     manifest["status"] = "stopped" if stop_event.is_set() else "finished"
     manifest["end_host_ts"] = int(time.time())
-    manifest["samples"] = sess.sampling_result["samples"]
-    manifest["sample_errors"] = sess.sampling_result["errors"]
+    sr = getattr(sess, "sampling_result", {"samples": 0, "errors": 0})
+    manifest["samples"] = sr.get("samples", 0)
+    manifest["sample_errors"] = sr.get("errors", 0)
     write_run_manifest(manifest, manifest_path)
     return manifest
 
@@ -244,15 +254,17 @@ def _finish_with_lock(serial: str, out_dir: Path,
         run_exc is not None and "device lost" in str(run_exc).lower())
 
     if not device_lost:
-        try:
-            sample_end(serial, out_dir, sample_cfg, global_cfg, args, sess)
-        except Exception as e:
-            cleanup_errors.append(f"sample_end: {e}")
+        if sess is not None:
+            try:
+                sample_end(serial, out_dir, sample_cfg, global_cfg, args, sess)
+            except Exception as e:
+                cleanup_errors.append(f"sample_end: {e}")
 
-        try:
-            backend.cleanup()
-        except Exception as e:
-            cleanup_errors.append(f"backend.cleanup: {e}")
+        if backend is not None:
+            try:
+                backend.cleanup()
+            except Exception as e:
+                cleanup_errors.append(f"backend.cleanup: {e}")
 
     # 设备在线性探测：离线 → 直接 failed（device_lost），不叠加清理错误
     if not _device_online(serial):
