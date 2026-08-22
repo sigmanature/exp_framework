@@ -104,7 +104,7 @@ def buddyinfo_sample_loop(
 
             now = time.time()
             if now < next_t:
-                time.sleep(min(next_t - now, 1.0))
+                sleep_interruptible(stop_event, min(next_t - now, 1.0))
                 continue
 
             ts, flat, err = read_buddyinfo_once(serial)
@@ -219,7 +219,7 @@ def buddyinfo_with_thp_sample_loop(
 
             now = time.time()
             if now < next_t:
-                time.sleep(min(next_t - now, 1.0))
+                sleep_interruptible(stop_event, min(next_t - now, 1.0))
                 continue
 
             ts, flat, thp, err = read_buddyinfo_and_thp_once(

@@ -128,7 +128,7 @@ def sample_loop(
 
             now = time.time()
             if now < next_t:
-                time.sleep(min(next_t - now, 1.0))
+                sleep_interruptible(stop_event, min(next_t - now, 1.0))
                 continue
 
             s: Optional[Sample] = None
@@ -136,7 +136,7 @@ def sample_loop(
                 s = read_counters_once(serial, stats_dir, counters)
                 if not s.error:
                     break
-                time.sleep(max(0, retry_sleep_s))
+                sleep_interruptible(stop_event, max(0, retry_sleep_s))
 
             assert s is not None
             row = {

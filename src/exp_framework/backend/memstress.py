@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Sequence
 
 from exp_framework.utils.adb_utils import adb_shell
+from exp_framework.utils.signal_utils import (run_interruptible,
+                                              sleep_interruptible)
 
 from exp_framework.experiment.experiment import Experiment, register
 
@@ -359,9 +361,10 @@ class Memstress(Experiment):
             json.dumps(resolved, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8")
         try:
-            start_meminfo = subprocess.run(
+            start_meminfo = run_interruptible(
+                self.stop_event,
                 ["adb", "-s", self.serial, "shell", "dumpsys", "meminfo"],
-                capture_output=True, text=True, timeout=60)
+                timeout_s=60)
             (self.work_dir / "dumpsys_meminfo_start.txt").write_text(
                 start_meminfo.stdout or "", encoding="utf-8")
         except Exception:
@@ -410,10 +413,11 @@ class Memstress(Experiment):
             started = False
             for attempt in range(5):
                 try:
-                    push_cp = subprocess.run(
+                    push_cp = run_interruptible(
+                        self.stop_event,
                         ["adb", "-s", self.serial, "push", str(local_script),
                          "/data/local/tmp/device_cycle_runner.sh"],
-                        capture_output=True, text=True, timeout=60)
+                        timeout_s=60)
                     if push_cp.returncode != 0:
                         raise RuntimeError((push_cp.stdout or "")
                                            + (push_cp.stderr or ""))
@@ -433,7 +437,7 @@ class Memstress(Experiment):
                 except Exception as e:
                     print(f"[{self.serial}] push/start attempt {attempt + 1} failed: {e}",
                           file=sys.stderr)
-                    time.sleep(10)
+                    sleep_interruptible(self.stop_event, 10)
             if not started:
                 raise RuntimeError(f"failed to push/start device cycle runner "
                                    f"on {self.serial}")
@@ -448,18 +452,18 @@ class Memstress(Experiment):
             heartbeat_timeout_s = int(
                 self._cfg("heartbeat_timeout_s", 0) or 0)
             while True:
-                time.sleep(poll_interval_s)
+                sleep_interruptible(self.stop_event, poll_interval_s)
                 if self.stop_event.is_set():
                     subprocess.run(
                         ["adb", "-s", self.serial, "shell",
                          "touch /data/local/tmp/memstress_stop"],
                         capture_output=True, timeout=15)
                 try:
-                    done_out = subprocess.run(
+                    done_out = run_interruptible(
+                        self.stop_event,
                         ["adb", "-s", self.serial, "shell",
                          "cat /data/local/tmp/memstress_done 2>/dev/null"],
-                        capture_output=True, text=True,
-                        timeout=15).stdout.strip()
+                        timeout_s=15).stdout.strip()
                 except Exception:
                     done_out = ""
                 if done_out:
@@ -467,11 +471,11 @@ class Memstress(Experiment):
                           file=sys.stderr)
                     break
                 try:
-                    lines_out = subprocess.run(
+                    lines_out = run_interruptible(
+                        self.stop_event,
                         ["adb", "-s", self.serial, "shell",
                          "wc -l < /data/local/tmp/memstress_cycles.tsv 2>/dev/null"],
-                        capture_output=True, text=True,
-                        timeout=15).stdout.strip()
+                        timeout_s=15).stdout.strip()
                     cur_lines = int(lines_out) if lines_out.isdigit() else 0
                 except Exception:
                     cur_lines = last_lines
@@ -511,10 +515,11 @@ class Memstress(Experiment):
             ("/data/local/tmp/runner_self.log", "runner_self.log"),
         ):
             try:
-                subprocess.run(
+                run_interruptible(
+                    self.stop_event,
                     ["adb", "-s", self.serial, "pull", remote,
                      str(self.work_dir / local)],
-                    capture_output=True, timeout=30)
+                    timeout_s=30)
             except Exception:
                 pass
 

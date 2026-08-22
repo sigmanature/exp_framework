@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from exp_framework.utils.signal_utils import sleep_interruptible
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
@@ -65,7 +66,7 @@ def cleanup_after_boot(serial: str, wait_after_boot_s: int = 90,
         if out == "1":
             status["booted"] = True
             break
-        time.sleep(5)
+        sleep_interruptible(stop_event, 5)
     if not status["booted"]:
         return status
 
@@ -81,7 +82,7 @@ def cleanup_after_boot(serial: str, wait_after_boot_s: int = 90,
     if uptime < fresh_boot_uptime_s:
         if stop_event is not None and stop_event.is_set():
             return status
-        time.sleep(wait_after_boot_s)
+        sleep_interruptible(stop_event, wait_after_boot_s)
         status["settled"] = True
 
     # 3) force-stop running THIRD-PARTY app packages (best effort; system
@@ -168,7 +169,7 @@ def wait_for_cool_down(
         if elapsed >= max_wait_s:
             print(f"[cool_down] timeout after {elapsed:.0f}s", flush=True)
             return temps
-        time.sleep(poll_s)
+        sleep_interruptible(stop_event, poll_s)
 
 
 def is_device_awake(serial: str) -> Tuple[bool, str]:
@@ -306,7 +307,7 @@ def ensure_awake_unlocked_and_stay_awake(
             if awake:
                 break
             if attempt < max(1, retries):
-                time.sleep(max(0, retry_sleep_s))
+                sleep_interruptible(stop_event, max(0, retry_sleep_s))
         else:
             f.write("[prep] never became awake within retries\n")
             f.flush()

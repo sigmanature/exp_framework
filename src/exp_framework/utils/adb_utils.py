@@ -19,7 +19,14 @@ def run(
     check: bool = False,
     capture_output: bool = True,
     text: bool = True,
+    stop_event: Optional[object] = None,
 ) -> subprocess.CompletedProcess:
+    """统一命令执行入口；stop_event 非 None 时事件化（置位立即 terminate）。"""
+    if stop_event is not None:
+        from exp_framework.utils.signal_utils import run_interruptible
+        return run_interruptible(
+            stop_event, list(cmd), timeout_s=timeout_s, check=check,
+            capture_output=capture_output, text=text)
     return subprocess.run(
         list(cmd),
         timeout=timeout_s,
@@ -127,7 +134,8 @@ def adb_base(serial: str) -> List[str]:
     return ["adb", "-s", serial]
 
 
-def adb_shell_cp(serial: str, cmd: str, *, timeout_s: int = 60, check: bool = False) -> subprocess.CompletedProcess:
+def adb_shell_cp(serial: str, cmd: str, *, timeout_s: int = 60, check: bool = False,
+                 stop_event: Optional[object] = None) -> subprocess.CompletedProcess:
     """Run `adb shell <cmd>` and return a CompletedProcess.
 
     Unlike `run(...)`, this helper is used in long-running loops (memstress/sampling).
@@ -137,7 +145,7 @@ def adb_shell_cp(serial: str, cmd: str, *, timeout_s: int = 60, check: bool = Fa
 
     argv = adb_base(serial) + ["shell", cmd]
     try:
-        return run(argv, timeout_s=timeout_s, check=check)
+        return run(argv, timeout_s=timeout_s, check=check, stop_event=stop_event)
     except subprocess.TimeoutExpired as e:
         # `subprocess.run(..., text=True)` may still provide bytes in TimeoutExpired on some versions.
         out = e.stdout
@@ -161,6 +169,7 @@ def adb_shell(
     timeout_s: int = 30,
     tty: bool = False,
     check: bool = True,
+    stop_event: Optional[object] = None,
 ) -> str:
     base = adb_base(serial)
 
@@ -170,7 +179,8 @@ def adb_shell(
         cp = run_with_pty(base + shell_cmd + [cmd], timeout_s=timeout_s)
     else:
         # Avoid extra `sh -c` layer for argv-style tools such as `input`/`wm`.
-        cp = run(base + shell_cmd + [cmd], timeout_s=timeout_s, check=False)
+        cp = run(base + shell_cmd + [cmd], timeout_s=timeout_s, check=False,
+                 stop_event=stop_event)
 
     if check and cp.returncode != 0:
         raise RuntimeError((cp.stderr or cp.stdout or "adb shell failed").strip())
@@ -207,13 +217,16 @@ def adb_shell_retry(
 
 
 def _shell_root_direct(serial: str, cmd: str, *, timeout_s: int = 30,
-                       tty: bool = False, check: bool = True) -> str:
+                       tty: bool = False, check: bool = True,
+                       stop_event: Optional[object] = None) -> str:
     """root 模式：adbd 已以 root 运行，直接执行（tty 忽略）。"""
-    return adb_shell(serial, cmd, timeout_s=timeout_s, check=check)
+    return adb_shell(serial, cmd, timeout_s=timeout_s, check=check,
+                     stop_event=stop_event)
 
 
 def _shell_root_su(serial: str, cmd: str, *, timeout_s: int = 30,
-                   tty: bool = False, check: bool = True) -> str:
+                   tty: bool = False, check: bool = True,
+                   stop_event: Optional[object] = None) -> str:
     """su 模式：adb shell su -c '<cmd>'（cmd 整体单引号引用）。
 
     注意：不能包一层 `sh -c`（su -c sh -c 'cmd'）——magisk su 的 -c 只取
@@ -226,7 +239,7 @@ def _shell_root_su(serial: str, cmd: str, *, timeout_s: int = 30,
                            f"su -c {quoted}"], timeout_s=timeout_s)
     else:
         cp = run(adb_base(serial) + ["shell", "su", "-c", quoted],
-                 timeout_s=timeout_s, check=False)
+                 timeout_s=timeout_s, check=False, stop_event=stop_event)
     if check and cp.returncode != 0:
         raise RuntimeError((cp.stderr or cp.stdout or "adb shell failed").strip())
     return cp.stdout or ""

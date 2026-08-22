@@ -173,7 +173,7 @@ def device_cleanup(serial: str):
         "pkill -x tasktime 2>/dev/null; true",
     ):
         try:
-            adb_utils.adb_shell_root(serial, cmd, timeout_s=15, check=False)
+            adb_utils.adb_shell_root(serial, cmd, timeout_s=5, check=False)
         except Exception:
             pass
 

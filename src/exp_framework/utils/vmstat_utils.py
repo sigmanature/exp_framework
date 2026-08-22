@@ -296,7 +296,7 @@ def vmstat_sample_loop(
 
             now = time.time()
             if now < next_t:
-                time.sleep(min(next_t - now, 1.0))
+                sleep_interruptible(stop_event, min(next_t - now, 1.0))
                 continue
 
             values = read_vmstat(serial, keys=keys)
