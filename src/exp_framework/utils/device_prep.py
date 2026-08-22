@@ -44,20 +44,21 @@ FRAMEWORK_READY_TIMEOUT_S = 180
 # （实测 start 后立刻 am start 报 Can't find service: activity）。
 FRAMEWORK_SETTLE_S = 15
 
-# 锁频 ~80% of max（全部 3 个 cluster；就近可用 OPP：77.7% / 81.5% / 80.4%）。
+# 锁频 ~75% of max（全部 3 个 cluster；就近可用 OPP：73.7% / 73.8% / 73.1%）。
+# 80% 档（1401/1836/2252）实测 40 轮 BIG 贴 115°C 内核 trip 线，降至 75% 留余量。
 # 通过内核 global_freq_lock 锁定（屏蔽一切其他频率设置源）：
 # 写 cpuN/cpufreq/global_freq_lock = 锁定值（kHz），写 0 解除。
 GFL = "/sys/devices/system/cpu/cpu$i/cpufreq/global_freq_lock"
 
-LOCK_FREQ_80PCT_CMD = (
+LOCK_FREQ_75PCT_CMD = (
     "for i in 0 1 2 3; do "
-    f"echo 1401000 > {GFL} 2>/dev/null; "
+    f"echo 1328000 > {GFL} 2>/dev/null; "
     "done; "
     "for i in 4 5; do "
-    f"echo 1836000 > {GFL} 2>/dev/null; "
+    f"echo 1663000 > {GFL} 2>/dev/null; "
     "done; "
     "for i in 6 7; do "
-    f"echo 2252000 > {GFL} 2>/dev/null; "
+    f"echo 2048000 > {GFL} 2>/dev/null; "
     "done")
 
 # 冷却最低频：framework-stop 后锁到各核 cpuinfo_min（每 cluster 不同：
@@ -247,9 +248,9 @@ def cool_down_with_framework_stop(
     temps = wait_for_cool_down(serial, stop_event=stop_event,
                                max_wait_s=max_wait_s)
 
-    # 4) 锁频 80%（冷却后锁，保证实验起始温度 = 锁频态真实温度）
-    _log("[lock_cpu_freq_80pct] global_freq_lock=1401/1836/2252MHz")
-    adb_utils.adb_shell_root(serial, LOCK_FREQ_80PCT_CMD, timeout_s=10,
+    # 4) 锁频 75%（冷却后锁，保证实验起始温度 = 锁频态真实温度）
+    _log("[lock_cpu_freq_75pct] global_freq_lock=1328/1663/2048MHz")
+    adb_utils.adb_shell_root(serial, LOCK_FREQ_75PCT_CMD, timeout_s=10,
                              tty=True, check=False)
 
     # 5) 拉起 framework 并等待就绪（就绪判定写死：activity 服务可达）
