@@ -24,6 +24,7 @@ from exp_framework.utils.device_prep import ensure_zram
 from exp_framework.utils.exp_lock import (exp_lock_claim, exp_lock_heartbeat,
                                           exp_lock_mark_cleanup_failed,
                                           exp_lock_release)
+from exp_framework.utils.kernel_boot_utils import verify as kernel_boot_verify
 from exp_framework.utils.sysctl_util import verify as sysctl_verify
 
 import exp_framework.backend  # noqa: F401  (注册后端副作用)
@@ -167,6 +168,17 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
     backend = create_experiment(name, backend_cfg, global_cfg, serial,
                                 out_dir, stop_event)
     _ACTIVE_BACKEND = backend
+
+    # 3b) 框架级 boot 参数校验（boot_params 配置驱动；未配置则 noop）。
+    #     pixel：回读 /sys/module/kernel/parameters/<param>，MISMATCH 时重打包
+    #     vendor_boot（保留官方 bootconfig + 注入参数）→ 刷入 → 重启 → 回读。
+    #     放在 prepare 之前：刷机重启后 prepare（冷却/清理）完整重跑。
+    boot_params = global_cfg.get("boot_params") or []
+    if boot_params:
+        boot_results = kernel_boot_verify(global_cfg)
+        bad = [r["param"] for r in boot_results if not r["ok"]]
+        if bad:
+            raise RuntimeError(f"boot_params verify failed: {bad}")
 
     # 4-6) prepare → sample_start → run；任何失败（含 prepare/sample_start）
     #      都走统一收尾 _finish_with_lock（保证游标状态机自洽）

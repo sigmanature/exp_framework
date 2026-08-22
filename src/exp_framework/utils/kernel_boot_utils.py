@@ -69,10 +69,6 @@ def _verify_pixel(serial: str, params: List[Dict[str, Any]],
         if not ok:
             need_repackage = True
     if need_repackage:
-        if os.environ.get("KERNEL_BOOT_REPACKAGE") != "1":
-            print("  boot 参数不匹配，但 KERNEL_BOOT_REPACKAGE != 1（默认安全护栏）："
-                  "跳过重打包刷机，请显式设置 KERNEL_BOOT_REPACKAGE=1 再跑")
-            return results
         print("  boot 参数不匹配 → 重打包 vendor_boot 并刷入重启")
         img = repackage_vendor_boot(serial, params, vendor_boot_dir)
         flash_and_reboot(serial, img)
