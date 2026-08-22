@@ -1,5 +1,5 @@
 {
-  "_template": "16K anon(THP always) + 文件页 large folio 默认 + kcompressd 关",
+  "_template": "16K anon(THP always) + 文件页 large folio 默认 + kcompressd 关 | kfragd=1, fs_disable_large_folio=0(文件页 large folio)",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
@@ -20,7 +20,7 @@
       {
         "param": "kfragd_enabled",
         "path": "/proc/sys/vm/kfragd_enabled",
-        "expected": "0"
+        "expected": "1"
       },
       {
         "param": "kswapd_order2_threshold",
@@ -171,7 +171,14 @@
       "exp_name": "baseline_16k_nokcompressd",
       "domain": "pixel",
       "platform": "pixel"
-    }
+    },
+    "boot_params": [
+      {
+        "param": "fs_disable_large_folio",
+        "path": "/sys/module/kernel/parameters/fs_disable_large_folio",
+        "expected": "0"
+      }
+    ]
   },
   "packages_resolved": {},
   "samples": null,
