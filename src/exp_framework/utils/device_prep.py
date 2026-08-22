@@ -6,7 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 
-from .adb_utils import adb_shell, adb_shell_retry, adb_utils
+from . import adb_utils
+from .adb_utils import adb_shell, adb_shell_retry
 
 
 def _read_thermal_zone(serial: str, zone: str) -> float:
