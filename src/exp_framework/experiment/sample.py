@@ -319,6 +319,7 @@ class SampleSession:
         self.threads: List[threading.Thread] = []
         self.sampling_result = {"samples": 0, "errors": 0}
         self.combined_stop: Optional[StopEvent] = None
+        self.local_stop: Optional[threading.Event] = None
         self.logcat_handle = None
         self.vmstat_keys = None
         self.odpm_enabled = False
@@ -433,6 +434,7 @@ def sample_start(serial: str, out_dir: Path, sample_cfg: Dict[str, Any],
     combined_stop.add(stop_event)
     combined_stop.add(local_stop)
     sess.combined_stop = combined_stop
+    sess.local_stop = local_stop  # 正常收尾只停采样线程，不污染 stop_event
 
     sess.cycle_sample_result: Dict = {}
     sess.threads.extend(start_cycle_samplers(
@@ -466,9 +468,12 @@ def sample_end(serial: str, out_dir: Path, sample_cfg: Dict[str, Any],
                sess: SampleSession) -> None:
     """停止全部采样设施并推导产物。必须在 backend.run() 之后（含异常路径）。"""
 
-    # 先停采样线程（cycle_sample 各域）：combined_stop 置位后自然退出
-    if sess.combined_stop is not None:
-        sess.combined_stop.set()
+    # 先停采样线程（cycle_sample 各域）：local_stop 置位后自然退出。
+    # 注意：不能 set combined_stop（它包含 stop_event）——正常收尾置位
+    # stop_event 会让 manifest status=stopped、退出码 130，污染"用户停止"语义。
+    # crash 检测路径仍用 combined_stop（stop_event+local 一起停，主流程感知）。
+    if sess.local_stop is not None:
+        sess.local_stop.set()
     for t in [sess.sampler_thread] + list(sess.threads):
         if t is not None:
             t.join(timeout=10)
