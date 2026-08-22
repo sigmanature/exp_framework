@@ -8,6 +8,7 @@
 backend.run() 会尽快退出，sample_end 在 finally 中必然执行。
 """
 import argparse
+import json
 import os
 import re
 import signal
@@ -239,6 +240,7 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
     # 7) manifest 收尾
     manifest["status"] = "stopped" if stop_event.is_set() else "finished"
     manifest["end_host_ts"] = int(time.time())
+    manifest["stop_reason"] = stop_reason_summary(sess, run_exc)
     sr = getattr(sess, "sampling_result", {"samples": 0, "errors": 0})
     manifest["samples"] = sr.get("samples", 0)
     manifest["sample_errors"] = sr.get("errors", 0)
@@ -343,6 +345,9 @@ def _finish_with_lock(serial: str, out_dir: Path,
             cleanup_errors.append(f"state/exit_code 写入: {e}")
 
     # 状态机更新（游标写入失败不覆盖原异常，只告警）
+    stop_reason = stop_reason_summary(sess, run_exc)
+    if stop_reason.get("triggered_by"):
+        print(f"[{serial}] stop_reason: {stop_reason}", file=sys.stderr)
     try:
         if device_lost:
             reason = f"device_lost: {run_exc if run_exc is not None else 'device offline'}"[:300]
@@ -356,11 +361,21 @@ def _finish_with_lock(serial: str, out_dir: Path,
         else:
             state = "failed" if (run_exc is not None or stopped) else "done"
             reason = f"exit_code={exit_code}"
+            if stopped and stop_reason.get("triggered_by"):
+                reason += f"; stop_reason={stop_reason['triggered_by']}({stop_reason.get('detail', '')})"
             print(f"[{serial}] exp_lock: release({state})", file=sys.stderr)
             exp_lock_release(domain, serial, exp_id, state, reason)
     except Exception as e:
         print(f"[{serial}] exp_lock update failed (锁状态可能需人工检查): {e}",
               file=sys.stderr)
+
+    # stop_reason 写入实验目录（供 manifest 收尾引用/审计）
+    try:
+        (out_dir / "state" / "stop_reason.json").write_text(
+            json.dumps(stop_reason, ensure_ascii=False, indent=1) + "\n",
+            encoding="utf-8")
+    except Exception:
+        pass
 
 
 def run_one_device(serial: str, out_dir: Path, args: argparse.Namespace,
@@ -373,6 +388,41 @@ def run_one_device(serial: str, out_dir: Path, args: argparse.Namespace,
 # ---------------- 信号 / 清理 ----------------
 
 _ACTIVE_BACKEND = None  # 当前运行的后端（供信号/清理时调用 stop_device）
+
+# ---- stop 原因登记器：stop_event 被置位时记录来源，收尾透传到 manifest/游标 ----
+_STOP_REASON: Dict[str, Any] = {}
+
+
+def record_stop_reason(key: str, detail: Any = "") -> None:
+    """登记 stop 来源（信号/crash/device_lost 等），线程安全。
+
+    收尾时 _finish_with_lock 读取并写入 manifest["stop_reason"] 与游标 reason，
+    解决"实验完成但退出码异常/失败原因不明"的透传问题。
+    """
+    _STOP_REASON.clear()
+    _STOP_REASON["triggered_by"] = key
+    _STOP_REASON["detail"] = str(detail)[:200]
+    _STOP_REASON["ts"] = int(time.time())
+
+
+def _signal_name(sig) -> str:
+    try:
+        return signal.Signals(sig).name
+    except Exception:
+        return str(sig)
+
+
+def stop_reason_summary(sess: Any, run_exc: Optional[BaseException]) -> Dict[str, Any]:
+    """组装 stop 原因：信号登记（handler 写入）+ crash 检测 + 异常。"""
+    info = dict(_STOP_REASON)
+    if not info.get("triggered_by") and sess is not None:
+        if getattr(sess, "crash_event", None) is not None and sess.crash_event.is_set():
+            info = {"triggered_by": "crash_detected",
+                    "detail": "logcat 命中 crash 签名（combined_stop 置位）",
+                    "ts": int(time.time())}
+    if run_exc is not None:
+        info.setdefault("run_exc", f"{type(run_exc).__name__}: {run_exc}"[:200])
+    return info
 
 
 def device_cleanup(serial: str):
@@ -417,6 +467,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     def _handler(sig, frame):
         print("\n[stopping]")
+        record_stop_reason("signal", f"{_signal_name(sig)} (sig={sig})")
         stop_event.set()
         threading.Thread(target=device_cleanup, args=(args.serial,),
                          daemon=True).start()

@@ -212,6 +212,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     def _handler(sig, frame):
         print("\n[stopping]")
+        experiment_runner.record_stop_reason(
+            "signal", f"{experiment_runner._signal_name(sig)} (sig={sig})")
         stop_event.set()
         threading.Thread(target=experiment_runner.device_cleanup,
                          args=(args.serial,), daemon=True).start()
