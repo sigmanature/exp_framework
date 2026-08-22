@@ -455,3 +455,27 @@ def ensure_awake_unlocked_and_stay_awake(
                     f"{datetime.now().isoformat()}\n")
             f.flush()
 
+        # Framework start 后重新清理（cleanup_after_boot 在 framework-stop 前
+        # 执行的效果被 framework 重启冲掉：start 后 system_server 重启、
+        # 缓存重新填充——负载起点内存状态应是清理后的干净态，而非重启后的
+        # 随机态。best effort：force-stop 三方包 + am kill-all + drop caches。
+        f.write(f"[post_framework_cleanup] {datetime.now().isoformat()}\n")
+        for post_cmd in (
+            "for p in $(pm list packages -3 2>/dev/null | cut -d: -f2); do "
+            "timeout 10 am force-stop $p 2>/dev/null; done",
+            "am kill-all || true",
+            "echo 3 > /proc/sys/vm/drop_caches 2>/dev/null; true",
+        ):
+            f.write(f"$ {post_cmd}\n")
+            try:
+                out = adb_utils.adb_shell_root(
+                    serial, post_cmd, timeout_s=30, check=False)
+                if out.strip():
+                    f.write(out)
+                    if not out.endswith("\n"):
+                        f.write("\n")
+            except Exception as e:
+                f.write(f"ERR: {e}\n")
+        f.write(f"[post_framework_cleanup] done {datetime.now().isoformat()}\n")
+        f.flush()
+
