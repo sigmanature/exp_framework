@@ -183,7 +183,7 @@ def wait_for_cool_down(
     zones: list = None,
     max_temps: dict = None,
     poll_s: int = 10,
-    max_wait_s: int = COOLDOWN_TIMEOUT_S,
+    max_wait_s: Optional[float] = None,  # None = 无限冷却，直到达标
     plateau_samples: int = PLATEAU_SAMPLES,
     stop_event=None,
 ) -> dict:
@@ -237,7 +237,10 @@ def wait_for_cool_down(
             return {z: -1.0 for z in zones}
         if stable_abs >= plateau_samples or plateau_ok:
             return temps
-        if elapsed >= max_wait_s:
+        # 冷却不设超时（max_wait_s=None 无限冷却）：直到达标才继续——
+        # 宁可等，不带着温度跑下一轮（连续实验热累积教训）。
+        # 兜底：stop_event 置位中断、传感器异常(-1)返回。
+        if max_wait_s is not None and elapsed >= max_wait_s:
             print(f"[cool_down] timeout after {elapsed:.0f}s", flush=True)
             return temps
         sleep_interruptible(stop_event, poll_s)
@@ -247,7 +250,7 @@ def cool_down_with_framework_stop(
     serial: str,
     *,
     stop_event=None,
-    max_wait_s: int = COOLDOWN_TIMEOUT_S,
+    max_wait_s: Optional[float] = None,  # None = 无限冷却，直到达标
     log_path: Optional[Path] = None,
 ) -> dict:
     """自包含加速冷却（memstress 专用路径）：
