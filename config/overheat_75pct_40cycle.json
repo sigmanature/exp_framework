@@ -1,5 +1,5 @@
 {
-  "_template": "overheat test: 100 apps, lock 80% freq (global_freq_lock), 40 cycles (复现热关机边界), thermal(zone16皮肤+CPU/G3D/电池) 2s + cpufreq 2s 采样",
+  "_template": "overheat test: 100 apps, lock 75% freq (global_freq_lock 1328/1663/2048), 40 cycles (BIG 余量验证), thermal(zone16皮肤+CPU/G3D/电池) 2s + cpufreq 2s 采样",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
@@ -131,7 +131,7 @@
       }
     },
     "exp_ctx": {
-      "exp_name": "overheat_80pct",
+      "exp_name": "overheat_75pct",
       "domain": "pixel"
     }
   },
