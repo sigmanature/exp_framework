@@ -149,11 +149,11 @@
       },
       "thermal": {
         "enabled": true,
-        "interval_s": 10
+        "interval_s": 2
       },
       "cpufreq": {
         "enabled": true,
-        "interval_s": 10
+        "interval_s": 2
       }
     }
   }
