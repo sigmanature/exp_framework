@@ -113,6 +113,11 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
     """
     # 0) exp_ctx（实验域/设备/agent 会话）+ exp_id（时间戳唯一）→ 串行锁
     ctx = (input_cfg.get("config", {}) or {}).get("exp_ctx", {}) or {}
+    # serial 以 runner 参数为准统一注入 exp_ctx：所有 verify 系列
+    # （sysctl/vmstat/trace/pkg/tasktime/kernel_boot）都从 exp_ctx.serial 读设备号，
+    # manifest 可能未声明 serial（如 memstress 系 manifest 只有 exp_name/domain），
+    # 统一在此补齐——runner 参数是权威，exp_ctx 只是配置容器。
+    ctx.setdefault("serial", serial)
     domain = str(ctx.get("domain") or "pixel")
     exp_id = _generate_exp_id(input_cfg, args)
     out_dir = out_dir / exp_id
@@ -179,10 +184,6 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
         #     zram：sysctl_nodes 含 zram 节点时确保 swap 启用
         sysctl_nodes = global_cfg.get("sysctl_nodes") or []
         if sysctl_nodes:
-            # verify 从 exp_ctx.serial 读设备号；manifest 可能未声明，
-            # 以 runner 的 serial 参数为准注入
-            gctx = global_cfg.setdefault("exp_ctx", {})
-            gctx.setdefault("serial", serial)
             sysctl_results = sysctl_verify(global_cfg)
             bad = [r["param"] for r in sysctl_results if not r["ok"]]
             if bad:
