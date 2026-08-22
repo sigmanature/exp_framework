@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 
-from .adb_utils import adb_shell, adb_shell_retry
+from .adb_utils import adb_shell, adb_shell_retry, adb_utils
 
 
 def _read_thermal_zone(serial: str, zone: str) -> float:
@@ -316,6 +316,14 @@ def ensure_awake_unlocked_and_stay_awake(
         # Cool down AFTER locking frequencies + screen-on prep: this is the
         # actual experiment condition (all cores at max freq), so the cooldown
         # result is the temperature the workload really starts from.
+        # 先幂等停掉设备端残留 memstress runner：无负载空转降温更快，
+        # 冷却达标后 start 新一轮负载（连续短测场景关键）。
+        try:
+            adb_utils.adb_shell_root(
+                serial, "touch /data/local/tmp/memstress_stop", timeout_s=5,
+                check=False)
+        except Exception:
+            pass
         f.write(f"[cool_down] start {datetime.now().isoformat()}\n")
         temps = wait_for_cool_down(serial, stop_event=stop_event)
         f.write(f"[cool_down] done BIG={temps.get('thermal_zone0', -1):.1f}°C "
