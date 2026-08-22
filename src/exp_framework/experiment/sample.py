@@ -498,7 +498,7 @@ def sample_end(serial: str, out_dir: Path, sample_cfg: Dict[str, Any],
     # kill fragmem if it was started (--precondition)
     if getattr(args, "precondition", False):
         try:
-            from fragmem_host import stop_fragmem
+            from exp_framework.fragmem_host import stop_fragmem
             stop_fragmem(serial)
         except Exception as error:
             print(f"[{serial}] stop_fragmem failed: {error}", file=sys.stderr)

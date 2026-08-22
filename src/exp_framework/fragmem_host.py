@@ -76,7 +76,7 @@ def start_fragmem(
     # ready file, then poll that file.
     ready_file = "/data/local/tmp/fragmem_ready.txt"
     launch_cmd = f"rm -f {ready_file}; {inner_cmd} > {ready_file} 2>/data/local/tmp/fragmem.log &"
-    from utils import adb_utils
+    from exp_framework.utils import adb_utils
     adb_utils.adb_shell_root(serial, launch_cmd, timeout_s=15, check=False)
 
     # Poll for FRAGMEM_READY
@@ -129,7 +129,7 @@ def _parse_ready_line(line: str) -> dict:
 
 def stop_fragmem(serial: str) -> None:
     """Kill fragmem on the device."""
-    from utils import adb_utils
+    from exp_framework.utils import adb_utils
     adb_utils.adb_shell_root(
         serial, "killall fragmem 2>/dev/null; rm -f /data/local/tmp/fragmem_ready.txt",
         timeout_s=10, check=False)

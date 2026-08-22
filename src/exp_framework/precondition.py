@@ -64,7 +64,7 @@ def main():
     time.sleep(10)
     # Wait for su (Magisk) to be ready
     print(f"[precondition] Waiting for su to be ready...")
-    from utils import adb_utils
+    from exp_framework.utils import adb_utils
     for _i in range(30):
         out = adb_utils.adb_shell_root(serial, "id", timeout_s=10, check=False)
         if "uid=0" in out:

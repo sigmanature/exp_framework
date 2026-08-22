@@ -254,7 +254,7 @@ def summarize_stalls(stalls: Iterable[StallEvent]) -> List[Dict[str, object]]:
 
 
 def _su(serial: str, cmd: str, *, timeout_s: int = 20, check: bool = False):
-    from utils import adb_utils
+    from exp_framework.utils import adb_utils
     out = adb_utils.adb_shell_root(serial, cmd, timeout_s=timeout_s, check=check)
     return subprocess.CompletedProcess(["adb", "shell"], 0, stdout=out)
 

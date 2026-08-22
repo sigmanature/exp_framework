@@ -133,7 +133,7 @@ def build_config(args: argparse.Namespace) -> dict:
     if args.package:
         packages.extend(args.package)
     if args.package_file:
-        from utils.pkg_utils import read_package_file
+        from exp_framework.utils.pkg_utils import read_package_file
         packages.extend(read_package_file(args.package_file))
     packages = list(dict.fromkeys(p for p in packages if p))
 
@@ -221,7 +221,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     runner_args = build_runner_args(args)
     try:
         if args.from_config:
-            from experiment.config import load_config
+            from exp_framework.experiment.config import load_config
             config = load_config(args.from_config)
             manifest = experiment_runner.run_with_config(
                 args.serial, out_dir, config, runner_args, stop_event)

@@ -128,7 +128,7 @@ def launch_and_background(serial: str, component: str, hold_ms: int,
     start_activity(serial, component, float_extras=float_extras)
     if mode == "interactive":
         time.sleep(0.6)
-        from utils.interactive import interactive_click_loop
+        from exp_framework.utils.interactive import interactive_click_loop
         interactive_click_loop(serial)
     time.sleep(max(0, hold_ms) / 1000.0)
     exit_to_home(serial)
@@ -336,7 +336,7 @@ class Memstress(Experiment):
     # ---- prepare：设备准备 + 包/活动解析 ----
 
     def prepare(self) -> Dict[str, Any]:
-        from utils.device_prep import ensure_awake_unlocked_and_stay_awake
+        from exp_framework.utils.device_prep import ensure_awake_unlocked_and_stay_awake
         ensure_awake_unlocked_and_stay_awake(
             self.serial, out_dir=self.out_dir, retries=3, retry_sleep_s=2,
             stop_event=self.stop_event)
@@ -429,7 +429,7 @@ class Memstress(Experiment):
                         "/data/local/tmp/memstress_events.tsv && "
                         "(setsid /data/local/tmp/device_cycle_runner.sh "
                         "</dev/null >/dev/null 2>&1 &)")
-                    from utils import adb_utils
+                    from exp_framework.utils import adb_utils
                     adb_utils.adb_shell_root(self.serial, start_cmd,
                                              timeout_s=60, check=True)
                     started = True
@@ -687,7 +687,7 @@ class Memstress(Experiment):
     def stop_device(self) -> None:
         """立即请求设备端 cycle runner 退出（幂等；信号/异常清理时调用）。"""
         try:
-            from utils import adb_utils
+            from exp_framework.utils import adb_utils
             adb_utils.adb_shell_root(self.serial, "touch /data/local/tmp/memstress_stop",
                                      timeout_s=15, check=False)
         except Exception:

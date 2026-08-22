@@ -164,7 +164,7 @@ def main():
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "command.txt").write_text(" ".join(sys.argv) + "\n")
-    from utils import adb_utils
+    from exp_framework.utils import adb_utils
     try:
         su_out = adb_utils.adb_shell_root(args.serial, "id", timeout_s=15, check=False)
     except Exception as e:
@@ -188,7 +188,7 @@ def main():
     records = []
     failures = []
     for idx, (pid, pkg, proc) in enumerate(procs, 1):
-        from utils import adb_utils
+        from exp_framework.utils import adb_utils
         smaps = adb_utils.adb_shell_root(args.serial, f"cat /proc/{pid}/smaps",
                                          timeout_s=20, check=False)
         p = subprocess.CompletedProcess(["adb", "shell"], 0, stdout=smaps, stderr="")

@@ -106,7 +106,7 @@ def pull_ftrace_mm_trace(serial: str, out_path: Path) -> int:
     """Pull trace data and save to file. Returns number of lines."""
     import subprocess
     base = f"/sys/kernel/tracing/instances/{FTRACE_INSTANCE}"
-    from utils import adb_utils
+    from exp_framework.utils import adb_utils
     out = adb_utils.adb_shell_root(serial, f"cat {base}/trace",
                                    timeout_s=120, check=False)
     out_path.write_text(cp.stdout, encoding="utf-8")

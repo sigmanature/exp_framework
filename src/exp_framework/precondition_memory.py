@@ -36,12 +36,12 @@ from typing import Dict, List, Optional, Tuple
 
 # Allow running standalone or as imported module
 try:
-    from utils.adb_utils import adb_shell
-    from utils.buddyinfo_utils import parse_buddyinfo
+    from exp_framework.utils.adb_utils import adb_shell
+    from exp_framework.utils.buddyinfo_utils import parse_buddyinfo
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from utils.adb_utils import adb_shell
-    from utils.buddyinfo_utils import parse_buddyinfo
+    from exp_framework.utils.adb_utils import adb_shell
+    from exp_framework.utils.buddyinfo_utils import parse_buddyinfo
 
 
 # === Defaults ===
@@ -64,7 +64,7 @@ def get_buddyinfo_sum_high_order(
     Returns (sum_value, all_zones_dict).
     """
     try:
-        from utils import adb_utils
+        from exp_framework.utils import adb_utils
         out = adb_utils.adb_shell_root(serial, "cat /proc/buddyinfo",
                                        timeout_s=15, tty=True, check=True)
         zones = parse_buddyinfo(out)

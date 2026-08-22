@@ -91,7 +91,7 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 0) 探测设备权限模式（root / su，自动选择；失败早停）
-    from utils import adb_utils
+    from exp_framework.utils import adb_utils
     adb_utils.ensure_privilege(serial)
 
     # 1) 输入 config -> 后端参数 + 全局参数 + 采样配置
@@ -168,7 +168,7 @@ def device_cleanup(serial: str):
             _ACTIVE_BACKEND.stop_device()
         except Exception:
             pass
-    from utils import adb_utils
+    from exp_framework.utils import adb_utils
     for cmd in (
         "touch /data/local/tmp/trace_capture/stop 2>/dev/null; "
         "echo 0 > /sys/kernel/tracing/tracing_on 2>/dev/null; true",

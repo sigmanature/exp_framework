@@ -10,7 +10,7 @@ from .adb_utils import adb_shell, adb_shell_retry, adb_utils
 
 
 def _read_thermal_zone(serial: str, zone: str) -> float:
-    import utils.adb_utils as adb_utils
+    from exp_framework.utils import adb_utils
     out = adb_utils.adb_shell_root(
         serial, f"cat /sys/class/thermal/{zone}/temp 2>/dev/null || echo -1",
         timeout_s=10, check=False)
@@ -91,7 +91,7 @@ def cleanup_after_boot(serial: str, wait_after_boot_s: int = 90,
     force_cmd = ("for p in $(pm list packages -3 2>/dev/null | cut -d: -f2); do "
                  "timeout 10 am force-stop $p 2>/dev/null; done")
     try:
-        import utils.adb_utils as adb_utils
+        from exp_framework.utils import adb_utils
         adb_utils.adb_shell_root(serial, force_cmd, timeout_s=180, check=False)
         status["force_stopped"] = True
     except Exception:
@@ -99,7 +99,7 @@ def cleanup_after_boot(serial: str, wait_after_boot_s: int = 90,
 
     # 4) am kill-all (safety net)
     try:
-        import utils.adb_utils as adb_utils
+        from exp_framework.utils import adb_utils
         adb_utils.adb_shell_root(serial, "am kill-all", timeout_s=30, check=False)
         status["killed"] = True
     except Exception:
@@ -107,7 +107,7 @@ def cleanup_after_boot(serial: str, wait_after_boot_s: int = 90,
 
     # 5) drop caches (page cache + dentries + inodes)
     try:
-        import utils.adb_utils as adb_utils
+        from exp_framework.utils import adb_utils
         adb_utils.adb_shell_root(serial, "echo 3 > /proc/sys/vm/drop_caches",
                                  timeout_s=30, check=False)
         status["dropped"] = True
