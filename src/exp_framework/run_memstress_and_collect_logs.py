@@ -61,7 +61,11 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--stop", action="store_true",
                    help="Stop a running experiment on the device")
     p.add_argument("--out-dir", "--out", dest="out_dir", default=None,
-                   help="Output directory")
+                   help="Output base directory; actual run dir = <base>/<exp_id> "
+                        "(exp_id = [exp_name_]timestamp, auto-generated)")
+    p.add_argument("--exp-name", default=None,
+                   help="Optional readable exp_id prefix (e.g. overheat_80pct); "
+                        "exp_id = <exp_name>_<timestamp>, unique by timestamp")
     p.add_argument("--max-cycles", type=int, default=CONFIG["max_cycles"])
     p.add_argument("--interval-s", type=int, default=CONFIG["interval_s"])
     p.add_argument("--counters", default=",".join(CONFIG["counters"]))
@@ -182,6 +186,7 @@ def build_runner_args(args: argparse.Namespace) -> argparse.Namespace:
         from_config=args.from_config,
         counters=args.counters,
         interval_s=args.interval_s,
+        exp_name=args.exp_name,
         tasktime_procs=args.tasktime_procs,
         no_crash_detect=args.no_crash_detect,
         clear_logcat=bool(args.clear_logcat),
@@ -196,8 +201,8 @@ def build_runner_args(args: argparse.Namespace) -> argparse.Namespace:
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     ensure_adb_works()
-    out_dir = Path(args.out_dir) if args.out_dir else Path(
-        f"/tmp/thp_memstress_{time.strftime('%Y%m%d_%H%M%S')}")
+    # out_dir 为 base：实际运行目录 = base/<exp_id>（runner 内自动拼接）
+    out_dir = Path(args.out_dir) if args.out_dir else Path.home() / "runs"
 
     if args.stop:
         experiment_runner.send_stop(args.serial)

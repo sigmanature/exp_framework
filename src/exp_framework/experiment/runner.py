@@ -9,6 +9,7 @@ backend.run() 会尽快退出，sample_end 在 finally 中必然执行。
 """
 import argparse
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -87,23 +88,38 @@ def _global_overrides(args: argparse.Namespace,
     return manifest
 
 
+def _generate_exp_id(input_cfg: Dict[str, Any], args: Any) -> str:
+    """exp_id = [exp_name_]%Y%m%d_%H%M%S（秒级，机制保证唯一）。
+
+    优先级：exp_ctx.exp_name（manifest）→ --exp-name（CLI 覆盖）→ 无前缀。
+    exp_name 仅允许 [A-Za-z0-9_-]，防路径注入/特殊字符。
+    """
+    ctx = (input_cfg.get("config", {}) or {}).get("exp_ctx", {}) or {}
+    exp_name = str(ctx.get("exp_name") or "") or str(getattr(args, "exp_name", "") or "")
+    exp_name = re.sub(r"[^A-Za-z0-9_-]", "", exp_name)[:64]
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    return f"{exp_name}_{ts}" if exp_name else ts
+
+
 def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
                     args: argparse.Namespace,
                     stop_event: threading.Event) -> Dict[str, Any]:
     """按输入 config 跑一次实验（框架主流程）。薄壳可绕过 CLI 直接调用。
 
     统一流程 = exp_lock 串行化（claim → 心跳 → 实验 → cleanup → 状态机更新）。
+    out_dir 参数为 base 目录，实际输出 = base/<exp_id>（exp_id 自动生成）。
     """
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # 0) exp_ctx（实验域/设备/agent 会话）→ 串行锁
+    # 0) exp_ctx（实验域/设备/agent 会话）+ exp_id（时间戳唯一）→ 串行锁
     ctx = (input_cfg.get("config", {}) or {}).get("exp_ctx", {}) or {}
     domain = str(ctx.get("domain") or "pixel")
-    exp_id = out_dir.name
+    exp_id = _generate_exp_id(input_cfg, args)
+    out_dir = out_dir / exp_id
+    out_dir.mkdir(parents=True, exist_ok=True)
     session_id = str(ctx.get("session_id") or os.environ.get("OPENCODE_SESSION_ID", ""))
     agent_tool = str(ctx.get("agent_tool") or os.environ.get("AGENT_TOOL", ""))
     claim = exp_lock_claim(domain, serial, exp_id, str(out_dir),
-                           session_id=session_id, agent_tool=agent_tool)
+                           session_id=session_id, agent_tool=agent_tool,
+                           enqueue_on_busy=False)
     if not claim.startswith("running"):
         print(f"[{serial}] exp_lock: {claim}", file=sys.stderr)
         raise RuntimeError(
@@ -292,20 +308,25 @@ def _finish_with_lock(serial: str, out_dir: Path,
         if not device_lost:
             cleanup_errors.append(f"state/exit_code 写入: {e}")
 
-    if device_lost:
-        reason = f"device_lost: {run_exc if run_exc is not None else 'device offline'}"[:300]
-        print(f"[{serial}] exp_lock: release(failed, {reason})", file=sys.stderr)
-        exp_lock_release(domain, serial, exp_id, "failed", reason)
-    elif cleanup_errors:
-        reason = "; ".join(cleanup_errors)[:500]
-        print(f"[{serial}] exp_lock: cleanup_failed -> {reason}",
+    # 状态机更新（游标写入失败不覆盖原异常，只告警）
+    try:
+        if device_lost:
+            reason = f"device_lost: {run_exc if run_exc is not None else 'device offline'}"[:300]
+            print(f"[{serial}] exp_lock: release(failed, {reason})", file=sys.stderr)
+            exp_lock_release(domain, serial, exp_id, "failed", reason)
+        elif cleanup_errors:
+            reason = "; ".join(cleanup_errors)[:500]
+            print(f"[{serial}] exp_lock: cleanup_failed -> {reason}",
+                  file=sys.stderr)
+            exp_lock_mark_cleanup_failed(domain, serial, exp_id, reason)
+        else:
+            state = "failed" if (run_exc is not None or stopped) else "done"
+            reason = f"exit_code={exit_code}"
+            print(f"[{serial}] exp_lock: release({state})", file=sys.stderr)
+            exp_lock_release(domain, serial, exp_id, state, reason)
+    except Exception as e:
+        print(f"[{serial}] exp_lock update failed (锁状态可能需人工检查): {e}",
               file=sys.stderr)
-        exp_lock_mark_cleanup_failed(domain, serial, exp_id, reason)
-    else:
-        state = "failed" if (run_exc is not None or stopped) else "done"
-        reason = f"exit_code={exit_code}"
-        print(f"[{serial}] exp_lock: release({state})", file=sys.stderr)
-        exp_lock_release(domain, serial, exp_id, state, reason)
 
 
 def run_one_device(serial: str, out_dir: Path, args: argparse.Namespace,

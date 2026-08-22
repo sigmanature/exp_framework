@@ -135,6 +135,10 @@
         "clear_logcat": true,
         "max_cycles": 120
       }
+    },
+    "exp_ctx": {
+      "exp_name": "memstress_default",
+      "domain": "pixel"
     }
   },
   "packages_resolved": {},

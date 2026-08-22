@@ -129,6 +129,10 @@
         "clear_logcat": true,
         "max_cycles": 20
       }
+    },
+    "exp_ctx": {
+      "exp_name": "overheat_80pct",
+      "domain": "pixel"
     }
   },
   "packages_resolved": {},

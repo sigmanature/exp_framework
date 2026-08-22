@@ -129,6 +129,10 @@
         "clear_logcat": true,
         "max_cycles": 40
       }
+    },
+    "exp_ctx": {
+      "exp_name": "compact_daemon_precond",
+      "domain": "pixel"
     }
   },
   "packages_resolved": {},

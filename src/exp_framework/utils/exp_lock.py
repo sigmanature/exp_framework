@@ -81,12 +81,16 @@ def _entry_claimable(e: Optional[Dict]) -> bool:
 
 @_with_lock
 def exp_lock_claim(domain: str, device: str, exp_id: str, run_dir: str,
-                   session_id: str = "", agent_tool: str = "") -> str:
+                   session_id: str = "", agent_tool: str = "",
+                   enqueue_on_busy: bool = True) -> str:
     """立即跑 or 排队（唯一入口）。
 
     判定顺序（临界区内，状态必是最新）：
       1) cleanup_failed → 拒绝（必须 exp_lock_clean 后才能再来）
-      2) running（别人）→ 已在队列则报位置，否则入队
+      2) running（别人）：
+         - 同 exp_id（重复启动同一实验）→ rejected:duplicate-exp-id（非重入）
+         - enqueue_on_busy=False（runner 直跑语义）→ rejected:busy，不入队
+         - 否则：已在队列则报位置，否则入队
       3) 空闲（无条目 / done / failed）→ 出队（若曾排队）→ 整体替换为
          当前实验的 running 条目（queue 保留）
     """
@@ -98,6 +102,10 @@ def exp_lock_claim(domain: str, device: str, exp_id: str, run_dir: str,
         return f"rejected:cleanup_failed ({e.get('exit_reason')!r})"
 
     if e and e.get("state") == "running":
+        if e.get("exp_id") == exp_id:
+            return "rejected:duplicate-exp-id"
+        if not enqueue_on_busy:
+            return "rejected:busy"
         queue: List[Dict] = e.setdefault("queue", [])
         for i, item in enumerate(queue):
             if item.get("exp_id") == exp_id:
@@ -140,6 +148,8 @@ def exp_lock_release(domain: str, device: str, exp_id: str, state: str,
     e["state"] = state
     e["exit_reason"] = reason or ""
     e["finished_at"] = _now()
+    e["queue"] = [q for q in (e.get("queue") or [])
+                  if q.get("exp_id") != exp_id]
     _write_cursor(d)
     return f"ok:{state}"
 
@@ -158,6 +168,8 @@ def exp_lock_mark_cleanup_failed(domain: str, device: str, exp_id: str,
     e["state"] = "cleanup_failed"
     e["exit_reason"] = reason
     e["finished_at"] = _now()
+    e["queue"] = [q for q in (e.get("queue") or [])
+                  if q.get("exp_id") != exp_id]
     _write_cursor(d)
     return "ok:cleanup_failed"
 
@@ -175,6 +187,8 @@ def exp_lock_clean(domain: str, device: str, exp_id: str, reason: str) -> str:
     e["state"] = "failed"
     e["exit_reason"] = f"manual_clean: {reason}"
     e["finished_at"] = _now()
+    e["queue"] = [q for q in (e.get("queue") or [])
+                  if q.get("exp_id") != exp_id]
     _write_cursor(d)
     return "ok:released"
 

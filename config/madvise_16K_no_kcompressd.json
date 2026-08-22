@@ -3,7 +3,8 @@
   "config": {
     "exp_ctx": {
       "serial": "<DEVICE_SERIAL>",
-      "domain": "pixel"
+      "domain": "pixel",
+      "exp_name": "madvise_16k_no_kcompressd"
     },
     "counters": [],
     "interval_s": 60,

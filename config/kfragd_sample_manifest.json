@@ -113,6 +113,10 @@
         "seed": 20260617,
         "max_cycles": 120
       }
+    },
+    "exp_ctx": {
+      "exp_name": "kfragd_sample",
+      "domain": "pixel"
     }
   },
   "sample_config": {

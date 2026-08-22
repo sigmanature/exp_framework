@@ -126,6 +126,50 @@ class ExpLockTestCase(unittest.TestCase):
         ids = [q["exp_id"] for q in e["queue"]]
         self.assertEqual(len(ids), len(set(ids)))
 
+    def test_enqueue_on_busy_false_rejects_without_queuing(self):
+        """runner 直跑语义：busy 时不入队，直接拒绝。"""
+        lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-a", "/run/a")
+        r = lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-b", "/run/b",
+                                   enqueue_on_busy=False)
+        self.assertEqual(r, "rejected:busy")
+        e = lockmod.exp_lock_get(DOMAIN, DEVICE)
+        self.assertEqual(e["queue"], [], "直跑拒绝不应留下队列条目")
+        # 释放后直跑可立即获得
+        lockmod.exp_lock_release(DOMAIN, DEVICE, "exp-a", "done")
+        r = lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-b", "/run/b",
+                                   enqueue_on_busy=False)
+        self.assertEqual(r, "running")
+
+    def test_duplicate_exp_id_rejected(self):
+        """非重入：同 exp_id 已 running 时重复 claim 直接拒绝。"""
+        lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-a", "/run/a")
+        r = lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-a", "/run/a2",
+                                   enqueue_on_busy=True)
+        self.assertEqual(r, "rejected:duplicate-exp-id")
+        e = lockmod.exp_lock_get(DOMAIN, DEVICE)
+        self.assertEqual(e["queue"], [], "重复启动不应入队")
+
+    def test_release_clears_queue_residual(self):
+        """release 顺带清掉该 exp_id 在 queue 的残留。"""
+        lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-a", "/run/a")
+        lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-b", "/run/b")
+        lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-c", "/run/c")
+        e = lockmod.exp_lock_get(DOMAIN, DEVICE)
+        self.assertEqual(len(e["queue"]), 2)
+        lockmod.exp_lock_release(DOMAIN, DEVICE, "exp-a", "done")
+        e = lockmod.exp_lock_get(DOMAIN, DEVICE)
+        self.assertEqual([q["exp_id"] for q in e["queue"]], ["exp-b", "exp-c"])
+
+    def test_clean_clears_queue_residual(self):
+        """clean 只清自己的残留条目，不误伤其他排队者。"""
+        lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-a", "/run/a")
+        lockmod.exp_lock_claim(DOMAIN, DEVICE, "exp-b", "/run/b")
+        lockmod.exp_lock_mark_cleanup_failed(DOMAIN, DEVICE, "exp-a", "x")
+        lockmod.exp_lock_clean(DOMAIN, DEVICE, "exp-a", "已清理")
+        e = lockmod.exp_lock_get(DOMAIN, DEVICE)
+        self.assertEqual([q["exp_id"] for q in e["queue"]], ["exp-b"],
+                         "clean 应清自己的残留、保留排队者")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
