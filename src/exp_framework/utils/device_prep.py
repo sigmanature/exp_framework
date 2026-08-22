@@ -187,6 +187,11 @@ def wait_for_cool_down(
         zones = list(COOLDOWN_ZONES.keys())
     if max_temps is None:
         max_temps = dict(COOLDOWN_ZONES)
+    # 皮肤温度（zone16=quiet_therm，VIRTUAL-SKIN 55°C 关机红线代理）：
+    # 冷却日志必须带它——机身蓄热传导会让皮肤在冷却期间继续升
+    # （R4 冷却中热关机教训：CPU 已锁 min 但皮肤过 55°C）。
+    if "thermal_zone16" not in zones:
+        zones = zones + ["thermal_zone16"]
     t0 = time.time()
     stable_abs = 0
     prev_temps = None
@@ -431,7 +436,9 @@ def ensure_awake_unlocked_and_stay_awake(
                 serial, stop_event=stop_event, log_path=log_path)
         finally:
             f.write(f"[cool_down] done BIG={temps.get('thermal_zone0', -1):.1f}°C "
-                    f"LITTLE={temps.get('thermal_zone2', -1):.1f}°C  "
+                    f"LITTLE={temps.get('thermal_zone2', -1):.1f}°C "
+                    f"SKIN={temps.get('thermal_zone16', -1):.1f}°C "
+                    f"(55°C 关机红线)  "
                     f"{datetime.now().isoformat()}\n")
             f.flush()
 
