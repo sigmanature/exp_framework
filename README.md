@@ -40,7 +40,7 @@ adb -s <YOUR_DEVICE_SERIAL> shell "su -c 'echo none > /sys/kernel/mm/transparent
 python3 scripts/run_memstress_and_collect_logs.py \
   --serial <YOUR_DEVICE_SERIAL> \
   --from-manifest config/default_memstress_manifest.json \
-  --out ./output/baseline_4k
+  --out ./output                # base：实际运行目录 = <base>/<exp_id>，自动按时间排布
 
 adb -s <YOUR_DEVICE_SERIAL> shell "su -c 'cat /sys/kernel/mm/transparent_hugepage/hugepages-16kB/enabled'"
 ```
@@ -55,7 +55,7 @@ adb -s <YOUR_DEVICE_SERIAL> shell "su -c 'echo always > /sys/kernel/mm/transpare
 python3 scripts/run_memstress_and_collect_logs.py \
   --serial <YOUR_DEVICE_SERIAL> \
   --from-manifest config/default_memstress_manifest.json \
-  --out ./output/thp_16k
+  --out ./output
 
 adb -s <YOUR_DEVICE_SERIAL> shell "su -c 'cat /sys/kernel/mm/transparent_hugepage/hugepages-16kB/enabled'"
 ```
@@ -81,7 +81,7 @@ If you already ran `adb root`, add `--no-use-su` to skip the `su -c` wrapper:
 python3 scripts/run_memstress_and_collect_logs.py \
   --serial <YOUR_DEVICE_SERIAL> \
   --from-manifest config/default_memstress_manifest.json \
-  --out-dir ./output/thp_16k \
+  --out ./output \
   --no-use-su
 ```
 
@@ -93,7 +93,7 @@ For example, to use a different output directory:
 python3 scripts/run_memstress_and_collect_logs.py \
   --serial <YOUR_DEVICE_SERIAL> \
   --from-manifest config/default_memstress_manifest.json \
-  --out-dir ./output/run_001
+  --out ./output
 ```
 
 ### Manifest parameters explained
@@ -126,7 +126,9 @@ python3 scripts/run_memstress_and_collect_logs.py --help
 
 ## What output you will get
 
-Each `--out-dir` will contain:
+`--out <base>` 只指定基础目录，实际运行目录自动为 `<base>/<exp_id>`（exp_id = `[exp_name_]时间戳`，秒级唯一，可用 `--exp-name` 加可读前缀）。每次运行生成独立子目录，历史不覆盖。
+
+Each run dir will contain:
 
 - `raw_samples.csv`: raw cumulative kernel counter values
 - `derived.csv`: per-window deltas and the fallback ratio
