@@ -281,10 +281,10 @@ def verify(config: dict) -> list:
     """trace 事件名校验（gate 预检）：复用 validate_events(strict=False)。
 
     config 约定：config["sample_config"]["trace"]["captures"][].events，
-    config["_ctx"] = {"serial"}。
+    config["exp_ctx"] = {"serial"}。
     """
     from typing import Any, Dict, List
-    ctx = config.get("_ctx", {})
+    ctx = config.get("exp_ctx", {})
     serial = ctx.get("serial")
     captures = (config.get("sample_config") or {}).get("trace", {}).get("captures", [])
     events = [e for cap in captures for e in (cap.get("events") or [])]

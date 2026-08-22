@@ -8,6 +8,7 @@
 backend.run() 会尽快退出，sample_end 在 finally 中必然执行。
 """
 import argparse
+import os
 import signal
 import subprocess
 import sys
@@ -17,6 +18,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from exp_framework.utils.adb_utils import ensure_adb_works
+from exp_framework.utils.exp_lock import (exp_lock_claim, exp_lock_heartbeat,
+                                          exp_lock_mark_cleanup_failed,
+                                          exp_lock_release)
 
 import exp_framework.backend  # noqa: F401  (注册后端副作用)
 from exp_framework.experiment.experiment import create_experiment
@@ -86,33 +90,67 @@ def _global_overrides(args: argparse.Namespace,
 def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
                     args: argparse.Namespace,
                     stop_event: threading.Event) -> Dict[str, Any]:
-    """按输入 config 跑一次实验（框架主流程）。薄壳可绕过 CLI 直接调用。"""
+    """按输入 config 跑一次实验（框架主流程）。薄壳可绕过 CLI 直接调用。
+
+    统一流程 = exp_lock 串行化（claim → 心跳 → 实验 → cleanup → 状态机更新）。
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 0) 探测设备权限模式（root / su，自动选择；失败早停）
+    # 0) exp_ctx（实验域/设备/agent 会话）→ 串行锁
+    ctx = (input_cfg.get("config", {}) or {}).get("exp_ctx", {}) or {}
+    domain = str(ctx.get("domain") or "pixel")
+    exp_id = out_dir.name
+    session_id = str(ctx.get("session_id") or os.environ.get("OPENCODE_SESSION_ID", ""))
+    agent_tool = str(ctx.get("agent_tool") or os.environ.get("AGENT_TOOL", ""))
+    claim = exp_lock_claim(domain, serial, exp_id, str(out_dir),
+                           session_id=session_id, agent_tool=agent_tool)
+    if not claim.startswith("running"):
+        print(f"[{serial}] exp_lock: {claim}", file=sys.stderr)
+        raise RuntimeError(
+            f"设备 ({domain},{serial}) 已被占用，实验 {exp_id} 不能启动。"
+            f"排队/等待请用启动器（exp_lock_poll_until_free），"
+            f"或查询 exp_lock_status 确认占用者。")
+
+    # 0b) 心跳线程（60s 刷新；cleanup 完成后停）
+    heartbeat_stop = threading.Event()
+
+    def _heartbeat():
+        while not heartbeat_stop.wait(60):
+            try:
+                exp_lock_heartbeat(domain, serial, exp_id)
+            except Exception:
+                pass
+
+    threading.Thread(target=_heartbeat, name=f"exp_lock_hb_{serial}",
+                     daemon=True).start()
+
+    # 1) 探测设备权限模式（root / su，自动选择；失败早停）
     from exp_framework.utils import adb_utils
     adb_utils.ensure_privilege(serial)
 
-    # 1) 输入 config -> 后端参数 + 全局参数 + 采样配置
+    # 2) 输入 config -> 后端参数 + 全局参数 + 采样配置
     name, backend_cfg, global_cfg = backend_from_config(input_cfg)
     manifest = new_run_manifest(serial, input_cfg)
     manifest = _global_overrides(args, manifest)
+    manifest["exp_lock"] = {"domain": domain, "exp_id": exp_id,
+                            "claim": claim, "session_id": session_id,
+                            "agent_tool": agent_tool}
     manifest_path = out_dir / "run_manifest.json"
     write_run_manifest(manifest, manifest_path)
 
-    # 2) 实例化后端（注册为活跃后端，供信号/清理立即停设备端）
+    # 3) 实例化后端（注册为活跃后端，供信号/清理立即停设备端）
     global _ACTIVE_BACKEND
     backend = create_experiment(name, backend_cfg, global_cfg, serial,
                                 out_dir, stop_event)
     _ACTIVE_BACKEND = backend
 
-    # 3) prepare（设备准备 + 后端预检；失败早停，采样不启动）
+    # 4) prepare（设备准备 + 后端预检；失败早停，采样不启动）
     private_fields = backend.prepare()
     if private_fields:
         manifest.update(private_fields)
         write_run_manifest(manifest, manifest_path)
 
-    # 4) sample_start（sample_config = 模板 + manifest 差异 深合并；合成结果写入清单）
+    # 5) sample_start（sample_config = 模板 + manifest 差异 深合并；合成结果写入清单）
     sample_cfg = resolve_sample_config(manifest.get("sample_config", {}))
     manifest["sample_config"] = sample_cfg
     write_run_manifest(manifest, manifest_path)
@@ -120,23 +158,24 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
     sess = sample_start(serial, out_dir, sample_cfg, manifest["config"],
                         args, stop_event, resolved_pkgs=resolved_pkgs)
 
-    # 5) backend.run + 6) sample_end（finally 保证收尾）
+    # 6) backend.run + 收尾（finally 保证：cleanup → 状态机更新）
     backend_result: Dict[str, Any] = {}
+    run_exc: Optional[BaseException] = None
     try:
         backend_result = backend.run() or {}
         if backend_result:
             manifest.update(backend_result)
+    except BaseException as exc:
+        run_exc = exc
+        raise
     finally:
-        try:
-            sample_end(serial, out_dir, sample_cfg, manifest["config"],
-                       args, sess)
-        finally:
-            try:
-                backend.cleanup()
-            except Exception as e:
-                print(f"[{serial}] backend cleanup failed: {e}", file=sys.stderr)
-
-    _ACTIVE_BACKEND = None
+        _finish_with_lock(serial, out_dir, sample_cfg, manifest["config"],
+                          args, sess, backend,
+                          domain, serial, exp_id,
+                          heartbeat_stop,
+                          stopped=stop_event.is_set(),
+                          run_exc=run_exc)
+        _ACTIVE_BACKEND = None
 
     # 7) manifest 收尾
     manifest["status"] = "stopped" if stop_event.is_set() else "finished"
@@ -145,6 +184,116 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
     manifest["sample_errors"] = sess.sampling_result["errors"]
     write_run_manifest(manifest, manifest_path)
     return manifest
+
+
+def _device_residual_check(serial: str) -> List[str]:
+    """尽力检查设备端残留（best effort；设备离线视为无法确认→计入错误）。
+
+    检查项：设备端 memstress runner 进程、trace probe、tasktime。
+    """
+    from exp_framework.utils import adb_utils
+    problems: List[str] = []
+    probe_cmds = {
+        "memstress runner": "ps -A | grep -E 'device_cycle_runner|memstress'",
+        "trace probe": "ls /data/local/tmp/trace_capture/ 2>/dev/null | grep -q . && echo RUNNING",
+        "tasktime": "ps -A | grep -c tasktime",
+    }
+    try:
+        for label, cmd in probe_cmds.items():
+            out = adb_utils.adb_shell_root(serial, cmd, timeout_s=5,
+                                           check=False)
+            out = (out or "").strip()
+            if label == "tasktime":
+                if out.isdigit() and int(out) > 0:
+                    problems.append(f"tasktime 进程残留 ({out})")
+            elif out:
+                problems.append(f"{label} 残留: {out[:80]}")
+    except Exception:
+        problems.append("device offline：无法确认设备端清理状态（需人工检查）")
+    return problems
+
+
+def _device_online(serial: str) -> bool:
+    """设备在线探测：adb devices 是否列出该 serial（best effort）。"""
+    try:
+        import subprocess
+        out = subprocess.run(["adb", "devices"], capture_output=True,
+                             text=True, timeout=5).stdout
+        return serial in out
+    except Exception:
+        return False
+
+
+def _finish_with_lock(serial: str, out_dir: Path,
+                      sample_cfg: Dict[str, Any],
+                      global_cfg: Dict[str, Any], args: Any, sess: Any,
+                      backend: Any,
+                      domain: str, exp_id: str,
+                      heartbeat_stop: threading.Event,
+                      stopped: bool, run_exc: Optional[BaseException]) -> None:
+    """统一收尾：sample_end → backend.cleanup → 状态机更新。
+
+    状态判定（干净语义）：
+    - 设备离线（device_lost 异常或 cleanup 阶段探测离线）→ failed，
+      reason 含 device_lost；cleanup 阶段的 adb 失败不叠加（断连本身就是原因）
+    - 设备在线但清理失败/残留 → cleanup_failed（锁不放，需人工确认设备干净）
+    - 干净 → done | failed（按 stop/异常）
+    """
+    cleanup_errors: List[str] = []
+    device_lost = (
+        run_exc is not None and "device lost" in str(run_exc).lower())
+
+    if not device_lost:
+        try:
+            sample_end(serial, out_dir, sample_cfg, global_cfg, args, sess)
+        except Exception as e:
+            cleanup_errors.append(f"sample_end: {e}")
+
+        try:
+            backend.cleanup()
+        except Exception as e:
+            cleanup_errors.append(f"backend.cleanup: {e}")
+
+    # 设备在线性探测：离线 → 直接 failed（device_lost），不叠加清理错误
+    if not _device_online(serial):
+        device_lost = True
+        cleanup_errors = []
+
+    if not device_lost:
+        cleanup_errors.extend(_device_residual_check(serial))
+
+    heartbeat_stop.set()  # 心跳停止（cleanup 完成后）
+
+    # state/exit_code（experiment_standard 状态机约定）
+    state_dir = out_dir / "state"
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+        if run_exc is not None:
+            exit_code = 1
+        elif stopped:
+            exit_code = 130
+        else:
+            exit_code = 0
+        (state_dir / "exit_code").write_text(str(exit_code) + "\n",
+                                             encoding="utf-8")
+    except Exception as e:
+        if not device_lost:
+            cleanup_errors.append(f"state/exit_code 写入: {e}")
+
+    if device_lost:
+        reason = f"device_lost: {run_exc if run_exc is not None else 'device offline'}"[:300]
+        print(f"[{serial}] exp_lock: release(failed, {reason})", file=sys.stderr)
+        exp_lock_release(domain, serial, exp_id, "failed", reason)
+    elif cleanup_errors:
+        reason = "; ".join(cleanup_errors)[:500]
+        print(f"[{serial}] exp_lock: cleanup_failed -> {reason}",
+              file=sys.stderr)
+        exp_lock_mark_cleanup_failed(domain, serial, exp_id, reason)
+    else:
+        state = "failed" if (run_exc is not None or stopped) else "done"
+        reason = f"exit_code={exit_code}"
+        print(f"[{serial}] exp_lock: release({state})", file=sys.stderr)
+        exp_lock_release(domain, serial, exp_id, state, reason)
 
 
 def run_one_device(serial: str, out_dir: Path, args: argparse.Namespace,

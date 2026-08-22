@@ -1,8 +1,9 @@
 {
   "serial": null,
   "config": {
-    "_ctx": {
-      "serial": "<DEVICE_SERIAL>"
+    "exp_ctx": {
+      "serial": "<DEVICE_SERIAL>",
+      "domain": "pixel"
     },
     "counters": [],
     "interval_s": 60,

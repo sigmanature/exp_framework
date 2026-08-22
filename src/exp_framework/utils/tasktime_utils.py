@@ -2,7 +2,7 @@
 
 verify(config) 输入约定：
   config["sample_config"]["tasktime"]["procs"] = ["kswapd0", ...]
-  config["_ctx"] = {"serial"}
+  config["exp_ctx"] = {"serial"}
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from exp_framework.experiment.sample import resolve_tasktime_targets
 
 
 def verify(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    ctx = config.get("_ctx", {})
+    ctx = config.get("exp_ctx", {})
     serial = ctx.get("serial")
     procs = (config.get("sample_config") or {}).get("tasktime", {}).get("procs", [])
     if not procs:

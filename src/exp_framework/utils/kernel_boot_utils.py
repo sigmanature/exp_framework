@@ -8,7 +8,7 @@
 
 verify(config) 输入约定：
   config["boot_params"] = [{"param", "path"(回读节点), "expected"}]
-  config["_ctx"] = {"serial", "platform", "vendor_boot_dir"(可选,默认 ~/learn_os/.worklog/vendor_boot_images)}
+  config["exp_ctx"] = {"serial", "platform", "vendor_boot_dir"(可选,默认 ~/learn_os/.worklog/vendor_boot_images)}
 每项返回 {"param", "expected", "actual", "ok"} 并当场打印。
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ _BOOT_DOMAIN_TOKENS = ("内核命令行", "boot", "cmdline")
 
 
 def verify(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    ctx = config.get("_ctx", {})
+    ctx = config.get("exp_ctx", {})
     params = config.get("boot_params", [])
     if not params:
         return []

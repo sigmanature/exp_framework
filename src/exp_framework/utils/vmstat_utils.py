@@ -112,10 +112,10 @@ def verify(config: dict) -> list:
     """vmstat keys 校验（gate 预检）：复用 read_vmstat。
 
     config 约定：config["sample_config"]["vmstat"]["keys"]，
-    config["_ctx"] = {"serial"}。
+    config["exp_ctx"] = {"serial"}。
     """
     from typing import Any, Dict, List
-    ctx = config.get("_ctx", {})
+    ctx = config.get("exp_ctx", {})
     serial = ctx.get("serial")
     keys = (config.get("sample_config") or {}).get("vmstat", {}).get("keys") or []
     if not keys:

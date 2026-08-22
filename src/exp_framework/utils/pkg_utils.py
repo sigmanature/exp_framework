@@ -28,10 +28,10 @@ def verify(config: dict) -> list:
     """包安装校验（gate 预检）：pm list packages 比对。
 
     config 约定：config["config"]["memstress"]["packages"]，
-    config["_ctx"] = {"serial"}。
+    config["exp_ctx"] = {"serial"}。
     """
     from . import adb_utils
-    ctx = config.get("_ctx", {})
+    ctx = config.get("exp_ctx", {})
     serial = ctx.get("serial")
     pkgs = (config.get("config") or {}).get("memstress", {}).get("packages", [])
     if not pkgs:

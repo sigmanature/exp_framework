@@ -2,7 +2,7 @@
 
 verify(config) 输入 config 约定：
   config["sysctl_nodes"] = [{"param", "path", "expected"}]
-  config["_ctx"] = {"serial"}
+  config["exp_ctx"] = {"serial"}
 比对规则：先等值；期望值以 "[" 开头时前缀匹配（Android sysfs 激活项标记格式）。
 每项返回 {"param", "expected", "actual", "ok"} 并当场打印一行（对齐 launch 输出）。
 """
@@ -32,7 +32,7 @@ def _write_value(expected: str) -> str:
 
 
 def verify(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    ctx = config.get("_ctx", {})
+    ctx = config.get("exp_ctx", {})
     serial = ctx.get("serial")
     nodes = config.get("sysctl_nodes", [])
     results: List[Dict[str, Any]] = []

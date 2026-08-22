@@ -57,7 +57,7 @@ class MadvisePagout(Experiment):
         # 1) 锁 max（与历史实验一致：scaling_min = scaling_max，8 核）
         self._lock_max()
 
-        # 2) 节点设置+回读+自检：一行，全走框架（config 里已配 _ctx + sysctl_nodes，
+        # 2) 节点设置+回读+自检：一行，全走框架（config 里已配 exp_ctx + sysctl_nodes，
         #    每个组一份配置文件，组旋钮期望值已在文件里写死）
         results = sysctl_util.verify(self.global_config)
         if any(not r["ok"] for r in results):

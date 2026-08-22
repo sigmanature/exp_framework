@@ -451,6 +451,10 @@ class Memstress(Experiment):
             last_heartbeat_ts = time.monotonic()
             heartbeat_timeout_s = int(
                 self._cfg("heartbeat_timeout_s", 0) or 0)
+            # 设备断连兜底：连续 adb 失败 max 次 → 判定设备丢失，快速退出
+            # （避免设备离线后无限空转的僵尸循环）
+            adb_fail_streak = 0
+            max_adb_fail = int(self._cfg("adb_fail_timeout", 5))
             while True:
                 sleep_interruptible(self.stop_event, poll_interval_s)
                 if self.stop_event.is_set():
@@ -479,6 +483,28 @@ class Memstress(Experiment):
                     cur_lines = int(lines_out) if lines_out.isdigit() else 0
                 except Exception:
                     cur_lines = last_lines
+                if cur_lines > last_lines:
+                    last_lines = cur_lines
+                # 设备连通性探测（区分"无新进展"与"adb 真失败"）：
+                # 仅统计显式探测失败，避免 cycle 慢被误判为设备丢失
+                if not self.stop_event.is_set():
+                    try:
+                        alive = run_interruptible(
+                            self.stop_event,
+                            ["adb", "-s", self.serial, "shell", "echo ok"],
+                            timeout_s=5).stdout.strip() == "ok"
+                    except Exception:
+                        alive = False
+                    if alive:
+                        adb_fail_streak = 0
+                    else:
+                        adb_fail_streak += 1
+                        if adb_fail_streak >= max_adb_fail:
+                            msg = (f"[{self.serial}] device lost: "
+                                   f"{adb_fail_streak} consecutive adb failures "
+                                   f"(device offline?)")
+                            print(msg, file=sys.stderr)
+                            raise RuntimeError(msg)
                 if cur_lines > last_lines:
                     last_lines = cur_lines
                     bucket = cur_lines // 10
