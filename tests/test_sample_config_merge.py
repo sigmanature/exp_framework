@@ -56,7 +56,7 @@ class TestSampleConfigMerge(unittest.TestCase):
             {"tasktime": {"procs": ["kswapd0"], "strict": False}})
         self.assertEqual(merged["tasktime"]["procs"], ["kswapd0"])
         self.assertFalse(merged["tasktime"]["strict"])
-        self.assertEqual(merged["power"]["odpm"], False)
+        self.assertEqual(merged["power"]["odpm"], True)  # 模板默认开功率采样
 
 
 if __name__ == "__main__":
