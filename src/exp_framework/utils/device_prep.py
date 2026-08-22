@@ -385,6 +385,11 @@ def ensure_awake_unlocked_and_stay_awake(
             # (already-compiled apps keep their odex; only uncompiled boot
             # apps interpret).
             ("setprop pm.dexopt.boot skip 2>/dev/null || true", "dexopt_boot_skip"),
+            # 后台 dexopt 也关掉：JobScheduler 空闲/充电时触发的编译同样
+            # 会污染冷启动耗时测量（bg-dexopt 与 boot 属性独立）。
+            ("setprop pm.dexopt.bg-dexopt skip 2>/dev/null || true; "
+             "setprop pm.dexopt.first-boot skip 2>/dev/null || true",
+             "dexopt_bg_skip"),
         ):
             f.write(f"\n[{label}] {datetime.now().isoformat()}\n")
             f.write(f"$ {prep_cmd}\n")
