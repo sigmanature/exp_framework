@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import adb_utils
+from .signal_utils import sleep_interruptible
 
 
 MAX_ORDER = 10

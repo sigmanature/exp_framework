@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from .adb_utils import run
 from . import adb_utils
+from .signal_utils import sleep_interruptible
 
 
 DEFAULT_STATS_DIR = "/sys/kernel/mm/transparent_hugepage/hugepages-16kB/stats"

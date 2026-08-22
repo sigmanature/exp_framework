@@ -28,7 +28,7 @@ BACKEND: Dict[str, Any] = {
 
 _BOOT_DOMAIN_TOKENS = ("内核命令行", "boot", "cmdline")
 _KNOWN_PARAMS = frozenset((
-    "max_cycles", "interval_s", "no_network_check",
+    "max_cycles", "interval_s",
     "burst_size", "hold_ms", "launch_gap_ms", "cycle_sleep_ms", "seed",
     "packages", "trace_events", "trace_strict", "vmstat_keys",
     "tasktime_procs", "buddyinfo_interval_s", "vmstat_interval_s",
@@ -93,8 +93,6 @@ def parse(extracted: Dict[str, str],
             cfg["max_cycles"] = _to_int(raw)
         elif param == "interval_s":
             cfg["interval_s"] = _to_int(raw)
-        elif param == "no_network_check":
-            cfg["no_network_check"] = _to_bool(raw)
         elif param == "burst_size":
             cfg["memstress"]["burst_size"] = _to_int(raw)
         elif param == "hold_ms":

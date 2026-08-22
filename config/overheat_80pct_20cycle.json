@@ -16,7 +16,6 @@
     ],
     "interval_s": 60,
     "use_su": true,
-    "no_network_check": true,
     "backend": {
       "name": "memstress",
       "config": {

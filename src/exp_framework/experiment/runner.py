@@ -39,7 +39,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--counters", default="")
     p.add_argument("--interval-s", type=int, default=60)
     p.add_argument("--tasktime-procs", default="")
-    p.add_argument("--no-network-check", action="store_true")
     p.add_argument("--no-crash-detect", action="store_true")
     p.add_argument("--clear-logcat", action="store_true")
     p.add_argument("--post-prepare-cmd", default=None)

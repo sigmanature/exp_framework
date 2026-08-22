@@ -34,7 +34,6 @@ CONFIG = {
     "max_cycles": 1200,
     "interval_s": 60,
     "counters": list(load_default_sample_config()["cycle_sample"]["counters"]["keys"]),
-    "no_network_check": True,
     "memstress": {
         "burst_size": 1,
         "hold_ms": 200,
@@ -87,8 +86,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--clear-logcat", "--no-clear-logcat", dest="clear_logcat",
                    action=argparse.BooleanOptionalAction,
                    default=CONFIG["memstress"]["clear_logcat"])
-    p.add_argument("--no-network-check", action="store_true",
-                   default=CONFIG["no_network_check"])
     p.add_argument("--tasktime-procs", default="",
                    help="Comma-separated process names (comm) to trace with tasktime")
     p.add_argument("--no-crash-detect", action="store_true",
@@ -186,7 +183,6 @@ def build_runner_args(args: argparse.Namespace) -> argparse.Namespace:
         counters=args.counters,
         interval_s=args.interval_s,
         tasktime_procs=args.tasktime_procs,
-        no_network_check=args.no_network_check,
         no_crash_detect=args.no_crash_detect,
         clear_logcat=bool(args.clear_logcat),
         post_prepare_cmd=args.post_prepare_cmd,
