@@ -485,6 +485,12 @@ class Memstress(Experiment):
                     cur_lines = last_lines
                 if cur_lines > last_lines:
                     last_lines = cur_lines
+                    bucket = cur_lines // 10
+                    if bucket > last_heartbeat_bucket:
+                        last_heartbeat_bucket = bucket
+                        last_heartbeat_ts = time.monotonic()
+                        print(f"[{self.serial}] device cycles: {cur_lines}/{max_cycles}",
+                              file=sys.stderr)
                 # 设备连通性探测（区分"无新进展"与"adb 真失败"）：
                 # 仅统计显式探测失败，避免 cycle 慢被误判为设备丢失
                 if not self.stop_event.is_set():
@@ -505,14 +511,6 @@ class Memstress(Experiment):
                                    f"(device offline?)")
                             print(msg, file=sys.stderr)
                             raise RuntimeError(msg)
-                if cur_lines > last_lines:
-                    last_lines = cur_lines
-                    bucket = cur_lines // 10
-                    if bucket > last_heartbeat_bucket:
-                        last_heartbeat_bucket = bucket
-                        last_heartbeat_ts = time.monotonic()
-                        print(f"[{self.serial}] device cycles: {cur_lines}/{max_cycles}",
-                              file=sys.stderr)
                 if (heartbeat_timeout_s
                         and time.monotonic() - last_heartbeat_ts
                         >= heartbeat_timeout_s):
