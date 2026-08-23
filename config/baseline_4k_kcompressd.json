@@ -49,7 +49,7 @@
       },
       {
         "param": "kcompressd_enabled",
-        "path": "/proc/sys/vm/kcompressd_enabled",
+        "path": "/sys/module/kcompressd/parameters/kcompressd_enabled",
         "expected": "1"
       }
     ],
