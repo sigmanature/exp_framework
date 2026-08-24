@@ -229,8 +229,10 @@ def wait_for_cool_down(
             abs_ok = abs_ok and skin <= VIRTUAL_SKIN_SAFE_C
         stable_abs = stable_abs + 1 if abs_ok else 0
 
-        # Condition 2: plateau (delta T <= 1C for N samples) with balance <= 65C
-        plateau_ok = False
+        # Condition 2: plateau（仅日志参考，不再作为达标条件——
+        #   硬冷却只认 abs（含 VIRTUAL-SKIN ≤ 阈值），plateau 达标可能
+        #   绕过 VIRTUAL-SKIN 判据（实测 skin 38.7°C 时 plateau 3/3 早退，
+        #   靠 settle 复查循环兜底但效率差））
         if prev_temps is not None:
             deltas = [abs(temps[z] - prev_temps[z]) for z in zones]
             if all(d <= PLATEAU_DELTA_C for d in deltas) and \
@@ -238,15 +240,13 @@ def wait_for_cool_down(
                 plateau_run += 1
             else:
                 plateau_run = 0
-            if plateau_run >= plateau_samples:
-                plateau_ok = True
         prev_temps = temps
 
         print(f"[cool_down] {parts}  abs={stable_abs}/{plateau_samples} "
               f"plateau={plateau_run}/{plateau_samples}  elapsed={elapsed:.0f}s", flush=True)
         if any(t < 0 for t in temps.values()):
             return {z: -1.0 for z in zones}
-        if stable_abs >= plateau_samples or plateau_ok:
+        if stable_abs >= plateau_samples:
             return temps
         # 冷却不设超时（max_wait_s=None 无限冷却）：直到达标才继续——
         # 宁可等，不带着温度跑下一轮（连续实验热累积教训）。
