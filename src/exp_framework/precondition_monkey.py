@@ -118,7 +118,7 @@ def fragment_app(serial: str, pkg: str, events: int, seed: int,
 
 
 def fragment_douyin_until(serial: str, threshold: int = 2000,
-                            max_swipes: int = 100,
+                            max_swipes: int = 400,
                             gap_s: float = 0.5) -> Dict:
     """刷抖音直到 order2+ < threshold（每次 swipe 后采样），达标即停。
 
@@ -176,7 +176,7 @@ def fragment(serial: str, apps: Sequence[str], events_per_app: int,
                 # 上下 swipe 刷视频，每次 swipe 采样 order2——<threshold 即停
                 r = fragment_douyin_until(
                     serial, threshold=buddy_threshold,
-                    max_swipes=events_per_app // 10 + 10,
+                    max_swipes=400,
                     gap_s=throttle_ms / 1000.0)
             elif kind == "bilibili":
                 r = interact_bilibili(serial, clicks=max(4, events_per_app // 100),
@@ -195,6 +195,10 @@ def fragment(serial: str, apps: Sequence[str], events_per_app: int,
             r = {"errors": 1, "exc": str(e)[:100]}
         print(f"[fragment] {pkg} ({kind}) 交互完成: {r}", flush=True)
 
+    # 打碎前清后台（用户确认关键）：killall 让 order2 起点干净、波动小
+    adb_utils.adb_shell_root(serial, "am kill-all || true", timeout_s=15,
+                             check=False)
+    time.sleep(2)
     before = _buddy_high_order_sum(serial)
     print(f"[fragment] 打碎前 order2+={before}", flush=True)
     import threading
@@ -233,6 +237,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--events-per-app", type=int, default=DEFAULT_EVENTS_PER_APP)
     p.add_argument("--throttle-ms", type=int, default=DEFAULT_THROTTLE_MS)
     p.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    p.add_argument("--threshold", type=int, default=2000,
+                   help="order2+ 打碎达标阈值（默认 2000）")
     p.add_argument("--network-off-after", action="store_true",
                    help="打碎完成后断网（冷启动阶段等效飞行模式）")
     p.add_argument("--no-fragment", action="store_true",
@@ -245,7 +251,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     set_network(args.serial, enabled=True)   # 打碎阶段网络开（应用加载内容）
     if not args.no_fragment:
         fragment(args.serial, apps, args.events_per_app,
-                 args.seed, args.throttle_ms)
+                 args.seed, args.throttle_ms,
+                 buddy_threshold=args.threshold)
     if args.network_off_after:
         set_network(args.serial, enabled=False)
     return 0
