@@ -115,7 +115,7 @@ def fragment_app(serial: str, pkg: str, events: int, seed: int,
 
 
 def fragment(serial: str, apps: Sequence[str], events_per_app: int,
-             seed: int, throttle_ms: int, sample_interval_s: float = 2.0) -> int:
+             seed: int, throttle_ms: int, sample_interval_s: float = 0.5) -> int:
     """逐应用交互打碎（INTERACTION_MAP 分发：douyin 刷视频/bilibili 点视频/
     youtube 下滑+点视频/camera 拍照），应用驻留后台。返回打碎后 order2+。
 

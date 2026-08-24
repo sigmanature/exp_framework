@@ -387,7 +387,7 @@ def run_app_interaction(serial: str, pkg: str) -> Optional[Dict]:
     except Exception as e:
         return {"error": str(e)}
 
-def interact_bilibili(serial: str, clicks: int = 8, gap_s: float = 0.6) -> Dict:
+def interact_bilibili(serial: str, clicks: int = 10, gap_s: float = 0.3) -> Dict:
     """Launch bilibili, tap video cards to play videos and hold memory.
 
     视频卡片 content-desc 格式为 "视频,标题,时长"——用前缀 "视频," 精确匹配，
@@ -406,7 +406,7 @@ def interact_bilibili(serial: str, clicks: int = 8, gap_s: float = 0.6) -> Dict:
         result["errors"] = 1
         result["launch_error"] = (cp.stdout or "")[:200]
         return result
-    time.sleep(6.0)  # 首屏视频列表加载
+    time.sleep(4.0)  # 首屏视频列表加载（加速）
 
     for i in range(clicks):
         root = dump_ui(serial)
@@ -427,7 +427,7 @@ def interact_bilibili(serial: str, clicks: int = 8, gap_s: float = 0.6) -> Dict:
         if i < clicks - 1:
             # 播放 -> BACK 回列表（不在播放页内 dump/点击）
             adb_shell_cp(serial, "input keyevent KEYCODE_BACK", timeout_s=8)
-            time.sleep(1.5)
+            time.sleep(0.6)
     return result
 
 
