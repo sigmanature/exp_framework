@@ -51,6 +51,11 @@
         "param": "kcompressd_enabled",
         "path": "/sys/module/kcompressd/parameters/kcompressd_enabled",
         "expected": "0"
+      },
+      {
+        "param": "kfragd_force_reclaim",
+        "path": "/proc/sys/vm/kfragd_force_reclaim",
+        "expected": "1"
       }
     ],
     "backend": {
