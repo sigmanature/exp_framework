@@ -333,17 +333,28 @@ def cool_down_with_framework_stop(
         _log(f"[framework_start] ready, settling {FRAMEWORK_SETTLE_S}s")
         sleep_interruptible(stop_event, FRAMEWORK_SETTLE_S)
 
-        # 6) settle 后复查 VIRTUAL-SKIN：不达标 → 再停再冷（覆盖 settle 升温）
-        src = read_skin_sources(serial)
-        skin = compute_virtual_skin(src)
-        if skin != skin or skin <= VIRTUAL_SKIN_SAFE_C:
+        # 6) settle 后观察期：framework start 的瞬时活动会让 VIRTUAL-SKIN
+        #    先冲高（实测 settle 后 +4.3°C），等它回落到稳定基线再复查——
+        #    观察期内任一时刻达标即放行；观察期结束仍超 → 再停再冷。
+        observe_s = 60
+        observe_deadline = time.monotonic() + observe_s
+        skin = float("nan")
+        while time.monotonic() < observe_deadline:
+            if stop_event is not None and stop_event.is_set():
+                raise RuntimeError("aborted during settle observe")
+            src = read_skin_sources(serial)
+            skin = compute_virtual_skin(src)
             if skin != skin:
-                _log(f"[framework_start] settle 后 VIRTUAL-SKIN=NaN（读不全），按达标处理")
-            else:
-                _log(f"[framework_start] settle 后 VIRTUAL-SKIN={skin:.1f}°C ≤ "
+                _log(f"[settle_observe] VIRTUAL-SKIN=NaN（读不全），继续观察")
+            elif skin <= VIRTUAL_SKIN_SAFE_C:
+                _log(f"[settle_observe] VIRTUAL-SKIN={skin:.1f}°C ≤ "
                      f"{VIRTUAL_SKIN_SAFE_C}°C，达标")
+                return temps
+            sleep_interruptible(stop_event, 5)
+        if skin != skin:
+            _log(f"[settle_observe] VIRTUAL-SKIN=NaN（读不全），按达标处理")
             return temps
-        _log(f"[framework_start] settle 后 VIRTUAL-SKIN={skin:.1f}°C > "
+        _log(f"[settle_observe] 观察期结束 VIRTUAL-SKIN={skin:.1f}°C > "
              f"{VIRTUAL_SKIN_SAFE_C}°C —— 机身仍热，再次停止冷却（attempt {attempt}）")
 
 
