@@ -42,8 +42,10 @@ CONSENT_EXCLUDE_TEXTS = [
 INTERACTION_MAP: Dict[str, str] = {
     "com.ss.android.ugc.aweme": "douyin",
     "com.ss.android.ugc.aweme.lite": "douyin",
-    "com.smile.gifmaker": "douyin",
+    "com.smile.gifmaker": "douyin",       # 快手：与抖音同模式（上下 swipe 刷视频）
     "com.kuaishou.nebula": "douyin",
+    "tv.danmaku.bili": "bilibili",         # 屏幕内容区点视频卡片
+    "com.google.android.youtube": "youtube",
 }
 
 # ---------------------------------------------------------------------------
@@ -384,3 +386,89 @@ def run_app_interaction(serial: str, pkg: str) -> Optional[Dict]:
         return func(serial)
     except Exception as e:
         return {"error": str(e)}
+
+def interact_bilibili(serial: str, clicks: int = 8, gap_s: float = 0.6) -> Dict:
+    """Launch bilibili, tap video cards to play videos and hold memory.
+
+    视频卡片 content-desc 格式为 "视频,标题,时长"——用前缀 "视频," 精确匹配，
+    避免匹配到 up 主头像/视频创作者（content-desc 含"视频"但无逗号前缀）。
+    点击后立即 BACK 回列表（不在播放页内 dump/点击——播放页的"视频"字样
+    可能指向 up 主头像，会造成"反复点头像不切视频"的循环）。
+
+    Returns dict with keys: clicks, clicked, errors.
+    """
+    result: Dict = {"clicks": clicks, "clicked": 0, "errors": 0}
+    adb_shell_cp(serial, "am force-stop tv.danmaku.bili", timeout_s=8)
+    time.sleep(0.5)
+    cp = adb_shell_cp(serial, "am start -n tv.danmaku.bili/.MainActivityV2",
+                      timeout_s=15, check=False)
+    if cp.returncode != 0 or "Error:" in (cp.stdout or ""):
+        result["errors"] = 1
+        result["launch_error"] = (cp.stdout or "")[:200]
+        return result
+    time.sleep(6.0)  # 首屏视频列表加载
+
+    for i in range(clicks):
+        root = dump_ui(serial)
+        if root is None:
+            result["errors"] += 1
+            continue
+        parent_map = _build_parent_map(root)
+        # 精确匹配视频卡片：content-desc 以 "视频," 开头（up 主头像不含逗号前缀）
+        targets = find_clickable_by_text(root, parent_map, ["视频,"], ())
+        if not targets:
+            break  # 无更多视频卡片
+        cx, cy, snippet = targets[0]
+        if _tap(serial, cx, cy):
+            result["clicked"] += 1
+        else:
+            result["errors"] += 1
+        time.sleep(gap_s)
+        if i < clicks - 1:
+            # 播放 -> BACK 回列表（不在播放页内 dump/点击）
+            adb_shell_cp(serial, "input keyevent KEYCODE_BACK", timeout_s=8)
+            time.sleep(1.5)
+    return result
+
+
+def interact_youtube(serial: str, swipes: int = 3, gap_s: float = 0.8) -> Dict:
+    """Launch YouTube, swipe the home feed down (list), then tap a video.
+
+    Returns dict with keys: swipes, swiped, clicked, errors.
+    """
+    result: Dict = {"swipes": swipes, "swiped": 0, "clicked": 0, "errors": 0}
+    adb_shell_cp(serial, "am force-stop com.google.android.youtube", timeout_s=8)
+    time.sleep(0.5)
+    cp = adb_shell_cp(
+        serial,
+        "am start -n com.google.android.youtube/.app.honeycomb.Shell$HomeActivity",
+        timeout_s=15, check=False)
+    if cp.returncode != 0 or "Error:" in (cp.stdout or ""):
+        result["errors"] = 1
+        result["launch_error"] = (cp.stdout or "")[:200]
+        return result
+    time.sleep(6.0)
+
+    # 先往下滑（列表滚动）——用户确认的油管交互
+    for _ in range(swipes):
+        ok = _swipe(serial, 540, 1800, 540, 700, 300)
+        if ok:
+            result["swiped"] += 1
+        else:
+            result["errors"] += 1
+        time.sleep(gap_s)
+
+    # 点击视频（UI 元素：content-desc/标题可点击）
+    root = dump_ui(serial)
+    if root is not None:
+        parent_map = _build_parent_map(root)
+        targets = find_clickable_by_text(
+            root, parent_map,
+            ["视频", "video", "YouTube", "youtube", "播放"], ())
+        if targets:
+            cx, cy, _ = targets[0]
+            if _tap(serial, cx, cy):
+                result["clicked"] = 1
+            else:
+                result["errors"] += 1
+    return result
