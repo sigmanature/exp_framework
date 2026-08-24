@@ -194,15 +194,7 @@
       },
       "thermal": {
         "enabled": true,
-        "interval_s": 2,
-        "zones": [
-          "thermal_zone16",
-          "thermal_zone0",
-          "thermal_zone1",
-          "thermal_zone2",
-          "thermal_zone3",
-          "thermal_zone25"
-        ]
+        "interval_s": 2
       },
       "cpufreq": {
         "enabled": true,
