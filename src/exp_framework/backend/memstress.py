@@ -370,7 +370,38 @@ class Memstress(Experiment):
         except Exception:
             pass
         self._resolved = resolved
-        return {"packages_resolved": resolved}
+
+        # ---- 打碎 precondition（backend.config 配置 precondition_monkey 块时执行）----
+        # 流程：killall 清后台 → 临时关 kfragd/force_reclaim（不整理碎片，4b verify 会设回）
+        # → 网络开 → 刷抖音直到 order2+ < threshold → 断网（冷启动等效飞行模式）
+        pm = self._cfg("precondition_monkey", {}) or {}
+        if pm.get("enabled"):
+            from exp_framework.precondition_monkey import (fragment_douyin_until,
+                                                           set_network)
+            from exp_framework.utils import device_nodes as _dn
+
+            if pm.get("killall_before", True):
+                adb_shell(self.serial, "am kill-all || true",
+                          timeout_s=15, check=False)
+                time.sleep(2)
+            for path, val in (("/proc/sys/vm/kfragd_enabled", "0"),
+                              ("/proc/sys/vm/kfragd_force_reclaim", "0")):
+                _dn.set_node(self.serial, path, val)
+
+            set_network(self.serial, enabled=True)
+            r = fragment_douyin_until(
+                self.serial,
+                threshold=int(pm.get("buddy_threshold", 2000)),
+                max_swipes=int(pm.get("max_swipes", 400)),
+                gap_s=float(pm.get("gap_s", 0.1)))
+            set_network(self.serial, enabled=False)
+            print(f"[{self.serial}] fragment result: {r}", file=sys.stderr)
+            self._fragment_result = r
+
+        result: Dict[str, Any] = {"packages_resolved": resolved}
+        if getattr(self, "_fragment_result", None):
+            result["fragment"] = self._fragment_result
+        return result
 
     # ---- run：生成/推送 runner -> 轮询完成 -> pull/解析 ----
 
