@@ -20,6 +20,10 @@ import sys
 import time
 from typing import List, Optional, Sequence
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from exp_framework.utils import adb_utils
 from exp_framework.utils.buddyinfo_utils import parse_buddyinfo
 
@@ -30,8 +34,7 @@ DEFAULT_SEED = 42
 
 # 重内存打碎应用（已确认设备安装；与 memstress 负载包不相交）
 DEFAULT_FRAGMENT_APPS = [
-    "com.ss.android.ugc.aweme",       # 抖音（先刷）
-    "tv.danmaku.bili",                # bilibili（再点视频）
+    "com.ss.android.ugc.aweme",       # 抖音刷视频（bilibili 点击率低，弃用）
 ]
 
 
@@ -114,8 +117,47 @@ def fragment_app(serial: str, pkg: str, events: int, seed: int,
         time.sleep(throttle_ms / 1000.0)
 
 
+def fragment_douyin_until(serial: str, threshold: int = 2000,
+                            max_swipes: int = 100,
+                            gap_s: float = 0.5) -> Dict:
+    """刷抖音直到 order2+ < threshold（每次 swipe 后采样），达标即停。
+
+    抖音打碎（用户确认的形态）：固定滑动坐标（屏幕中部，不下拉通知栏），
+    每 swipe 一次采样 /proc/buddyinfo——order2+ 降到阈值（默认 2000）就停，
+    打碎结束。返回 {swipes, final_o2, low_o2, threshold_met}。
+    """
+    from exp_framework.utils.interactive import _swipe
+
+    result: Dict = {"swipes": 0, "final_o2": 0, "low_o2": 2**31,
+                    "threshold_met": False}
+    adb_utils.adb_shell_root(serial, "am force-stop com.ss.android.ugc.aweme",
+                             timeout_s=8, check=False)
+    time.sleep(0.5)
+    adb_utils.adb_shell_root(
+        serial, "am start -n com.ss.android.ugc.aweme/.splash.SplashActivity",
+        timeout_s=15, check=False)
+    time.sleep(4.0)  # 首屏视频加载
+
+    for i in range(max_swipes):
+        _swipe(serial, 540, 1800, 540, 600, 300)   # 刷下一个视频
+        o2 = _buddy_high_order_sum(serial)
+        result["swipes"] = i + 1
+        result["final_o2"] = o2
+        result["low_o2"] = min(result["low_o2"], o2)
+        if o2 < threshold:
+            result["threshold_met"] = True
+            print(f"[fragment] swipe {i+1}: order2+={o2} < {threshold} —— 达标",
+                  flush=True)
+            break
+        if (i + 1) % 10 == 0:
+            print(f"[fragment] swipe {i+1}: order2+={o2}", flush=True)
+        time.sleep(gap_s)
+    return result
+
+
 def fragment(serial: str, apps: Sequence[str], events_per_app: int,
-             seed: int, throttle_ms: int, sample_interval_s: float = 0.5) -> int:
+             seed: int, throttle_ms: int, sample_interval_s: float = 0.5,
+             buddy_threshold: int = 2000) -> int:
     """逐应用交互打碎（INTERACTION_MAP 分发：douyin 刷视频/bilibili 点视频/
     youtube 下滑+点视频/camera 拍照），应用驻留后台。返回打碎后 order2+。
 
@@ -131,9 +173,11 @@ def fragment(serial: str, apps: Sequence[str], events_per_app: int,
         kind = INTERACTION_MAP.get(pkg, "")
         try:
             if kind == "douyin":
-                # 上下 swipe 刷视频（快手/抖音同模式），快节奏
-                r = interact_douyin(serial, swipes=max(10, events_per_app // 40),
-                                    gap_s=throttle_ms / 1000.0)
+                # 上下 swipe 刷视频，每次 swipe 采样 order2——<threshold 即停
+                r = fragment_douyin_until(
+                    serial, threshold=buddy_threshold,
+                    max_swipes=events_per_app // 10 + 10,
+                    gap_s=throttle_ms / 1000.0)
             elif kind == "bilibili":
                 r = interact_bilibili(serial, clicks=max(4, events_per_app // 100),
                                       gap_s=throttle_ms / 1000.0)
