@@ -37,10 +37,12 @@ COOLDOWN_ZONES = {
     "thermal_zone25": 40.0,  # battery
 }
 # VIRTUAL-SKIN 硬冷却阈值：thermal HAL 55°C 关机红线。
-# 物理下限：gnss/qi 是天生高传感器（idle ≈40°C），VIRTUAL-SKIN 冷却到极限后
-# settle 稳定 ≈42-43°C——低于 42°C 的判据永远不可达（35°C 实测卡死循环）。
-# 43°C = 可达下限 + 运行升幅(+11) ≈ 54°C，留 1°C 余量；settle 后复查循环兜底。
-VIRTUAL_SKIN_SAFE_C = 43.0
+# 温度账：settle 升温(+4.5°C 实测) + 运行升幅(+11°C) = +15.5°C →
+# 冷却判据须 ≤ 39.5°C（55 - 15.5）→ 取 39°C。
+# 可达性：冷却 45s 已到 40.6°C（不是极限），判据 39°C 意味着冷却更久
+# （设备彻底凉时 gnss/qi 可降到 38-39°C），不是物理下限（43°C 判据
+# 40.6 就放行导致 settle 后 44.9 超线的教训）。settle 后复查循环兜底。
+VIRTUAL_SKIN_SAFE_C = 39.0
 SKIN_SOURCE_ZONES = ["thermal_zone16", "thermal_zone17", "thermal_zone19",
                      "thermal_zone20", "thermal_zone22"]
 PLATEAU_DELTA_C = 1.0        # plateau: delta T <= 1C between samples
