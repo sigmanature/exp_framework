@@ -266,15 +266,13 @@ def cool_down_with_framework_stop(
     max_wait_s: Optional[float] = None,  # None = 无限冷却，直到达标
     log_path: Optional[Path] = None,
 ) -> dict:
-    """自包含加速冷却（memstress 专用路径），循环直到 settle 后 VIRTUAL-SKIN 达标：
+    """保持 framework 运行，锁最低频，冷却到 VIRTUAL-SKIN 硬阈值（39°C）。
 
-    循环体：
-      adb shell stop（zygote/system_server 全停，CPU 彻底空转）
-      → 锁最低频 → wait_for_cool_down（VIRTUAL-SKIN ≤ 阈值，无限冷却）
-      → 锁频 75% → adb shell start → 就绪 → settle
-      → 复查 VIRTUAL-SKIN：≤ 阈值 → 返回；> 阈值 → 再停再冷（机身热时
-        settle 阶段会升温 5°C+，冷却判据必须覆盖 settle 后的真实起点——
-        R3 教训：冷却达标 40°C 但 settle 后起点 48.8°C，负载期 +11°C 爆线）。
+    不 start/stop framework——反复启停本身是实验波动源（system_server 重启、
+    后台重新加载影响冷启动一致性；用户确认）。framework 运行态 idle 时
+    VIRTUAL-SKIN 基线随设备热状态漂移（凉时 ~38-39，热时 44+）——冷却到
+    阈值可能需要较长时间（设备热时无限等待，stop_event 可中断）。
+    锁 min 期间 framework 在跑（系统慢但可用），冷却达标后锁 75% 返回。
     """
     def _log(msg: str) -> None:
         print(f"[cool_down] {msg}", flush=True)
@@ -285,77 +283,17 @@ def cool_down_with_framework_stop(
             except Exception:
                 pass
 
-    attempt = 0
-    while True:
-        attempt += 1
-        _log(f"[cooldown_cycle] attempt {attempt}")
+    _log("[lock_cpu_freq_min] global_freq_lock=cpuinfo_min (framework 保持运行)")
+    adb_utils.adb_shell_root(serial, LOCK_FREQ_MIN_CMD, timeout_s=10,
+                             tty=True, check=False)
 
-        # 1) 停 framework：CPU 无任何用户态负载，空转降温最快
-        _log("[framework_stop] adb shell stop")
-        adb_utils.adb_shell_root(serial, "stop", timeout_s=15, check=False)
+    temps = wait_for_cool_down(serial, stop_event=stop_event,
+                               max_wait_s=max_wait_s)
 
-        # 2) 锁最低频：framework 已停 + CPU 锁最低频，空转降温最快
-        _log("[lock_cpu_freq_min] global_freq_lock=cpuinfo_min")
-        adb_utils.adb_shell_root(serial, LOCK_FREQ_MIN_CMD, timeout_s=10,
-                                 tty=True, check=False)
-
-        # 3) 冷却（最低频空转；VIRTUAL-SKIN ≤ VIRTUAL_SKIN_SAFE_C 为硬判据）
-        temps = wait_for_cool_down(serial, stop_event=stop_event,
-                                   max_wait_s=max_wait_s)
-
-        # 4) 锁频 75%（冷却后锁，保证实验起始温度 = 锁频态真实温度）
-        _log("[lock_cpu_freq_75pct] global_freq_lock=1328/1663/2048MHz")
-        adb_utils.adb_shell_root(serial, LOCK_FREQ_75PCT_CMD, timeout_s=10,
-                                 tty=True, check=False)
-
-        # 5) 拉起 framework 并等待就绪（就绪判定写死：activity 服务可达）
-        _log("[framework_start] adb shell start")
-        adb_utils.adb_shell_root(serial, "start", timeout_s=15, check=False)
-        deadline = time.monotonic() + FRAMEWORK_READY_TIMEOUT_S
-        ready = False
-        while time.monotonic() < deadline:
-            if stop_event is not None and stop_event.is_set():
-                raise RuntimeError("aborted while waiting for framework ready")
-            try:
-                out = adb_utils.adb_shell_root(
-                    serial, "cmd activity get-config >/dev/null 2>&1 && echo ok",
-                    timeout_s=15, check=False)
-                if "ok" in (out or ""):
-                    ready = True
-                    break
-            except Exception:
-                pass
-            sleep_interruptible(stop_event, 5)
-        if not ready:
-            raise RuntimeError("framework did not become ready after adb shell start "
-                               f"({FRAMEWORK_READY_TIMEOUT_S}s)")
-
-        _log(f"[framework_start] ready, settling {FRAMEWORK_SETTLE_S}s")
-        sleep_interruptible(stop_event, FRAMEWORK_SETTLE_S)
-
-        # 6) settle 后观察期：framework start 的瞬时活动会让 VIRTUAL-SKIN
-        #    先冲高（实测 settle 后 +4.3°C），等它回落到稳定基线再复查——
-        #    观察期内任一时刻达标即放行；观察期结束仍超 → 再停再冷。
-        observe_s = 60
-        observe_deadline = time.monotonic() + observe_s
-        skin = float("nan")
-        while time.monotonic() < observe_deadline:
-            if stop_event is not None and stop_event.is_set():
-                raise RuntimeError("aborted during settle observe")
-            src = read_skin_sources(serial)
-            skin = compute_virtual_skin(src)
-            if skin != skin:
-                _log(f"[settle_observe] VIRTUAL-SKIN=NaN（读不全），继续观察")
-            elif skin <= VIRTUAL_SKIN_SAFE_C:
-                _log(f"[settle_observe] VIRTUAL-SKIN={skin:.1f}°C ≤ "
-                     f"{VIRTUAL_SKIN_SAFE_C}°C，达标")
-                return temps
-            sleep_interruptible(stop_event, 5)
-        if skin != skin:
-            _log(f"[settle_observe] VIRTUAL-SKIN=NaN（读不全），按达标处理")
-            return temps
-        _log(f"[settle_observe] 观察期结束 VIRTUAL-SKIN={skin:.1f}°C > "
-             f"{VIRTUAL_SKIN_SAFE_C}°C —— 机身仍热，再次停止冷却（attempt {attempt}）")
+    _log("[lock_cpu_freq_75pct] global_freq_lock=1328/1663/2048MHz")
+    adb_utils.adb_shell_root(serial, LOCK_FREQ_75PCT_CMD, timeout_s=10,
+                             tty=True, check=False)
+    return temps
 
 
 def is_device_awake(serial: str) -> Tuple[bool, str]:
