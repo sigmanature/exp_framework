@@ -194,7 +194,7 @@
       },
       "thermal": {
         "enabled": true,
-        "interval_s": 2
+        "interval_s": 1
       },
       "cpufreq": {
         "enabled": true,

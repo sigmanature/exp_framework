@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from exp_framework.utils.signal_utils import sleep_interruptible
+from exp_framework.utils.thermal_model import compute_virtual_skin
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
@@ -34,12 +35,10 @@ COOLDOWN_ZONES = {
     "thermal_zone3": 55.0,   # G3D (GPU)
     "thermal_zone25": 40.0,  # battery
 }
-# 皮肤温度安全阈值（VIRTUAL-SKIN 55°C 关机红线，留 15°C 余量）。
-# CPU 判据会"假达标"（CPU 降得快、机身热容降得慢——连续实验轮间机身蓄热
-# 累积）；VIRTUAL-SKIN = MAXIMUM(qi_therm/usb_pwr_therm2/disp_therm/
-# gnss_tcxo_therm/quiet_therm/battery 的加权平均)——R5 教训：quiet_therm 44.8°C
-# 仍热关机，合成源之一过 55°C。冷却达标 = 全部皮肤合成源 ≤ 40°C（保守留余量）。
-SKIN_SAFE_C = 40.0
+# VIRTUAL-SKIN 硬冷却阈值：thermal HAL 55°C 关机红线留 15°C 余量。
+# 运行阶段（40 轮负载）VIRTUAL-SKIN 会升 ~9°C + 连续轮次机身热累积——
+# 40°C 起点 + 运行升幅 ≈ 52-53°C，仍在红线内；运行期过热一次即 shutdown。
+VIRTUAL_SKIN_SAFE_C = 40.0
 SKIN_SOURCE_ZONES = ["thermal_zone16", "thermal_zone17", "thermal_zone19",
                      "thermal_zone20", "thermal_zone22"]
 PLATEAU_DELTA_C = 1.0        # plateau: delta T <= 1C between samples
@@ -195,17 +194,15 @@ def wait_for_cool_down(
         zones = list(COOLDOWN_ZONES.keys())
     if max_temps is None:
         max_temps = dict(COOLDOWN_ZONES)
-    # 皮肤/机身温度（VIRTUAL-SKIN 合成源，55°C 关机红线代理）：
-    # ① 日志必须带它们（机身蓄热传导会让皮肤在冷却期间继续升，
-    #    R4 冷却中热关机教训：CPU 已锁 min 但皮肤过 55°C）
-    # ② 达标必要条件：全部合成源 ≤ SKIN_SAFE_C（CPU 判据会假达标——
-    #    CPU 降得快机身热容降得慢；R5 教训：quiet_therm 44.8 仍关机，
-    #    单源监控低估红线，必须覆盖 qi/usb/disp/gnss 全部源）
+    # 皮肤/机身温度（VIRTUAL-SKIN 合成模型，55°C 关机红线）：
+    # ① 合成源 zones 必须采（日志 + 计算输入）
+    # ② 硬冷却判据（abs）：VIRTUAL-SKIN（计算值）≤ VIRTUAL_SKIN_SAFE_C——
+    #    HAL 真判定值是合成值不是单源（R4/R5 热关机时 quiet 仅 43-44.8°C），
+    #    运行阶段过热一次就 shutdown，冷却余量 15°C（55-40）。
+    #    plateau 判据不纳入 VIRTUAL-SKIN（硬冷却只看 abs，用户确认）。
     for z in SKIN_SOURCE_ZONES:
         if z not in zones:
             zones = zones + [z]
-    for z in SKIN_SOURCE_ZONES:
-        max_temps.setdefault(z, SKIN_SAFE_C)
     t0 = time.time()
     stable_abs = 0
     prev_temps = None
@@ -219,9 +216,15 @@ def wait_for_cool_down(
             temps[z] = _read_thermal_zone(serial, z)
         elapsed = time.time() - t0
         parts = "  ".join(f"{z.split('_')[-1]}={temps[z]:.1f}°C" for z in zones)
+        if not (skin != skin):
+            parts += f"  skin={skin:.1f}°C"
 
-        # Condition 1: absolute thresholds (all zones <= limit)
-        abs_ok = all(temps[z] <= max_temps.get(z, 999) for z in zones) if all(t >= 0 for t in temps.values()) else False
+        # Condition 1: absolute thresholds (all zones <= limit) + VIRTUAL-SKIN 硬冷却
+        skin = compute_virtual_skin(temps)
+        abs_ok = (all(temps[z] <= max_temps.get(z, 999) for z in zones)
+                  if all(t >= 0 for t in temps.values()) else False)
+        if not (skin != skin):  # NaN 检查：skin 有效时纳入判据
+            abs_ok = abs_ok and skin <= VIRTUAL_SKIN_SAFE_C
         stable_abs = stable_abs + 1 if abs_ok else 0
 
         # Condition 2: plateau (delta T <= 1C for N samples) with balance <= 65C
