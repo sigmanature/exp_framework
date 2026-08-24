@@ -215,12 +215,12 @@ def wait_for_cool_down(
         for z in zones:
             temps[z] = _read_thermal_zone(serial, z)
         elapsed = time.time() - t0
+        skin = compute_virtual_skin(temps)
         parts = "  ".join(f"{z.split('_')[-1]}={temps[z]:.1f}°C" for z in zones)
         if not (skin != skin):
             parts += f"  skin={skin:.1f}°C"
 
         # Condition 1: absolute thresholds (all zones <= limit) + VIRTUAL-SKIN 硬冷却
-        skin = compute_virtual_skin(temps)
         abs_ok = (all(temps[z] <= max_temps.get(z, 999) for z in zones)
                   if all(t >= 0 for t in temps.values()) else False)
         if not (skin != skin):  # NaN 检查：skin 有效时纳入判据
