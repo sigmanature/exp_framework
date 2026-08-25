@@ -56,6 +56,11 @@
         "param": "kfragd_force_reclaim",
         "path": "/proc/sys/vm/kfragd_force_reclaim",
         "expected": "1"
+      },
+      {
+        "param": "kfragd_interval_ms",
+        "path": "/proc/sys/vm/kfragd_interval_ms",
+        "expected": "100"
       }
     ],
     "backend": {
@@ -169,7 +174,15 @@
         "seed": 20260617,
         "mode": "launch_only",
         "clear_logcat": true,
-        "max_cycles": 40
+        "max_cycles": 15,
+        "precondition_monkey": {
+          "enabled": true,
+          "buddy_threshold": 2000,
+          "max_swipes": 400,
+          "gap_s": 0.1,
+          "killall_before": true,
+          "lmkd_off": true
+        }
       }
     },
     "exp_ctx": {

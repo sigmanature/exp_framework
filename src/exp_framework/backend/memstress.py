@@ -374,6 +374,10 @@ class Memstress(Experiment):
         # ---- 打碎 precondition（backend.config 配置 precondition_monkey 块时执行）----
         # 流程：killall 清后台 → 临时关 kfragd/force_reclaim（不整理碎片，4b verify 会设回）
         # → 网络开 → 刷抖音直到 order2+ < threshold → 断网（冷启动等效飞行模式）
+        # killall_only=True：只 killall + 断网（无抖音打碎——对照组：killall 后
+        # buddy 空闲是"最稳初始状态"，见用户确认）。
+        # lmkd_off=True：打碎/负载期间关 lmkd（防止它杀应用导致碎片反弹），
+        # 实验结束由 cleanup() 恢复 start lmkd。
         pm = self._cfg("precondition_monkey", {}) or {}
         if pm.get("enabled"):
             from exp_framework.precondition_monkey import (fragment_douyin_until,
@@ -384,17 +388,25 @@ class Memstress(Experiment):
                 adb_shell(self.serial, "am kill-all || true",
                           timeout_s=15, check=False)
                 time.sleep(2)
-            for path, val in (("/proc/sys/vm/kfragd_enabled", "0"),
-                              ("/proc/sys/vm/kfragd_force_reclaim", "0")):
-                _dn.set_node(self.serial, path, val)
+            if pm.get("lmkd_off", True):
+                adb_shell(self.serial, "stop lmkd", timeout_s=15, check=False)
+                time.sleep(1)
 
-            set_network(self.serial, enabled=True)
-            r = fragment_douyin_until(
-                self.serial,
-                threshold=int(pm.get("buddy_threshold", 2000)),
-                max_swipes=int(pm.get("max_swipes", 400)),
-                gap_s=float(pm.get("gap_s", 0.1)))
-            set_network(self.serial, enabled=False)
+            if pm.get("killall_only"):
+                set_network(self.serial, enabled=False)
+                r = {"killall_only": True}
+            else:
+                for path, val in (("/proc/sys/vm/kfragd_enabled", "0"),
+                                  ("/proc/sys/vm/kfragd_force_reclaim", "0")):
+                    _dn.set_node(self.serial, path, val)
+
+                set_network(self.serial, enabled=True)
+                r = fragment_douyin_until(
+                    self.serial,
+                    threshold=int(pm.get("buddy_threshold", 2000)),
+                    max_swipes=int(pm.get("max_swipes", 400)),
+                    gap_s=float(pm.get("gap_s", 0.1)))
+                set_network(self.serial, enabled=False)
             print(f"[{self.serial}] fragment result: {r}", file=sys.stderr)
             self._fragment_result = r
 
@@ -755,6 +767,13 @@ class Memstress(Experiment):
             from exp_framework.utils.device_prep import LOCK_FREQ_UNLOCK_CMD
             from exp_framework.utils import adb_utils
             adb_utils.adb_shell_root(self.serial, LOCK_FREQ_UNLOCK_CMD,
+                                     timeout_s=10, check=False)
+        except Exception:
+            pass
+        # 恢复 lmkd（prepare 打碎阶段 stop 过；幂等——已在跑时 start 无副作用）
+        try:
+            from exp_framework.utils import adb_utils
+            adb_utils.adb_shell_root(self.serial, "start lmkd",
                                      timeout_s=10, check=False)
         except Exception:
             pass

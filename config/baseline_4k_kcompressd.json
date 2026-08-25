@@ -164,7 +164,14 @@
         "seed": 20260617,
         "mode": "launch_only",
         "clear_logcat": true,
-        "max_cycles": 40
+        "max_cycles": 15,
+        "precondition_monkey": {
+          "enabled": true,
+          "buddy_threshold": 2000,
+          "max_swipes": 400,
+          "gap_s": 0.1,
+          "killall_before": true
+        }
       }
     },
     "exp_ctx": {

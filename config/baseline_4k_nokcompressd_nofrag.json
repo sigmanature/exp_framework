@@ -1,5 +1,5 @@
 {
-  "_template": "4K anon(THP never) + 4K 文件页(bootconfig fs_disable_large_folio=1) + kcompressd 关",
+  "_template": "4K anon(THP never) + 4K 文件页(bootconfig fs_disable_large_folio=1) + kcompressd 关 | nofrag 对照组（killall+断网，无抖音打碎）",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
@@ -167,10 +167,8 @@
         "max_cycles": 15,
         "precondition_monkey": {
           "enabled": true,
-          "buddy_threshold": 2000,
-          "max_swipes": 400,
-          "gap_s": 0.1,
           "killall_before": true,
+          "killall_only": true,
           "lmkd_off": true
         }
       }

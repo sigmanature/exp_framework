@@ -1,5 +1,5 @@
 {
-  "_template": "4K anon(THP never) + 4K 文件页(bootconfig fs_disable_large_folio=1) + kcompressd 关",
+  "_template": "16K anon(THP always) + 文件页 large folio 默认 + kcompressd 关 | kfragd=1, fs_disable_large_folio=0(文件页 large folio) | nofrag 对照组（killall+断网，无抖音打碎）",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
@@ -20,7 +20,7 @@
       {
         "param": "kfragd_enabled",
         "path": "/proc/sys/vm/kfragd_enabled",
-        "expected": "0"
+        "expected": "1"
       },
       {
         "param": "kswapd_order2_threshold",
@@ -45,12 +45,22 @@
       {
         "param": "mthp_16k",
         "path": "/sys/kernel/mm/transparent_hugepage/hugepages-16kB/enabled",
-        "expected": "[never]"
+        "expected": "[always]"
       },
       {
         "param": "kcompressd_enabled",
         "path": "/sys/module/kcompressd/parameters/kcompressd_enabled",
         "expected": "0"
+      },
+      {
+        "param": "kfragd_force_reclaim",
+        "path": "/proc/sys/vm/kfragd_force_reclaim",
+        "expected": "1"
+      },
+      {
+        "param": "kfragd_interval_ms",
+        "path": "/proc/sys/vm/kfragd_interval_ms",
+        "expected": "100"
       }
     ],
     "backend": {
@@ -167,16 +177,14 @@
         "max_cycles": 15,
         "precondition_monkey": {
           "enabled": true,
-          "buddy_threshold": 2000,
-          "max_swipes": 400,
-          "gap_s": 0.1,
           "killall_before": true,
+          "killall_only": true,
           "lmkd_off": true
         }
       }
     },
     "exp_ctx": {
-      "exp_name": "baseline_4k_nokcompressd",
+      "exp_name": "baseline_16k_nokcompressd",
       "domain": "pixel",
       "platform": "pixel"
     },
@@ -184,7 +192,7 @@
       {
         "param": "fs_disable_large_folio",
         "path": "/sys/module/kernel/parameters/fs_disable_large_folio",
-        "expected": "1"
+        "expected": "0"
       }
     ]
   },
