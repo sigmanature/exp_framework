@@ -277,7 +277,10 @@ def _device_residual_check(serial: str) -> List[str]:
     problems: List[str] = []
     probe_cmds = {
         "memstress runner": "ps -A | grep -E 'device_cycle_runner|memstress'",
-        "trace probe": "ls /data/local/tmp/trace_capture/ 2>/dev/null | grep -q . && echo RUNNING",
+        # trace probe 正常停止后会 touch stop 标记并保留 .trace 产物——
+        # 用"目录存在且无 stop 标记"判定仍在运行，避免产物文件误报残留
+        "trace probe": "if [ -d /data/local/tmp/trace_capture ] && "
+                       "[ ! -e /data/local/tmp/trace_capture/stop ]; then echo RUNNING; fi",
         "tasktime": "ps -A | grep -c tasktime",
     }
     try:

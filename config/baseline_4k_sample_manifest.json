@@ -1,7 +1,6 @@
 {
   "_template": "baseline 4K 实验: 全 4K 无大 folio, 不抓 kfragd; 只统计 kswapd/kcompactd CPU; kswapd + direct/memcg reclaim trace 照抓。",
   "config": {
-    "use_su": true,
     "backend": {
       "name": "memstress",
       "config": {

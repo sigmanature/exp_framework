@@ -1,5 +1,5 @@
 {
-  "_template": "16K anon(THP always) + 文件页 large folio 默认 + kcompressd 关 | kfragd=1, fs_disable_large_folio=0(文件页 large folio) | nofrag 对照组（killall+断网，无抖音打碎）",
+  "_template": "16K 社区compaction: kfragd=0 proactiveness=30(wmark_low=70对齐kfragd)",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
@@ -17,11 +17,6 @@
     "interval_s": 60,
     "sysctl_nodes": [
       {
-        "param": "kfragd_enabled",
-        "path": "/proc/sys/vm/kfragd_enabled",
-        "expected": "1"
-      },
-      {
         "param": "zram_disksize",
         "path": "/sys/block/zram0/disksize",
         "expected": "8589934592"
@@ -37,14 +32,14 @@
         "expected": "0"
       },
       {
-        "param": "kfragd_force_reclaim",
-        "path": "/proc/sys/vm/kfragd_force_reclaim",
-        "expected": "1"
+        "param": "kfragd_enabled",
+        "path": "/proc/sys/vm/kfragd_enabled",
+        "expected": "0"
       },
       {
-        "param": "kfragd_interval_ms",
-        "path": "/proc/sys/vm/kfragd_interval_ms",
-        "expected": "100"
+        "param": "compaction_proactiveness",
+        "path": "/proc/sys/vm/compaction_proactiveness",
+        "expected": "30"
       }
     ],
     "backend": {
@@ -161,14 +156,16 @@
         "max_cycles": 15,
         "precondition_monkey": {
           "enabled": true,
+          "buddy_threshold": 2000,
+          "max_swipes": 400,
+          "gap_s": 0.1,
           "killall_before": true,
-          "killall_only": true,
           "lmkd_off": true
         }
       }
     },
     "exp_ctx": {
-      "exp_name": "baseline_16k_nokcompressd",
+      "exp_name": "cm_16k_community",
       "domain": "pixel",
       "platform": "pixel"
     },

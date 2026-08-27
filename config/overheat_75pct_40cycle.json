@@ -32,7 +32,6 @@
         "expected": "[never]"
       }
     ],
-    "use_su": true,
     "backend": {
       "name": "memstress",
       "config": {

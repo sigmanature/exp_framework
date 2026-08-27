@@ -1,5 +1,5 @@
 {
-  "_template": "16K anon(THP always) + 文件页 large folio 默认 + kcompressd 关 | kfragd=1, fs_disable_large_folio=0(文件页 large folio) | nofrag 对照组（killall+断网，无抖音打碎）",
+  "_template": "16K community proact=60(50/40原生) aligned",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
@@ -17,11 +17,6 @@
     "interval_s": 60,
     "sysctl_nodes": [
       {
-        "param": "kfragd_enabled",
-        "path": "/proc/sys/vm/kfragd_enabled",
-        "expected": "1"
-      },
-      {
         "param": "zram_disksize",
         "path": "/sys/block/zram0/disksize",
         "expected": "8589934592"
@@ -37,14 +32,24 @@
         "expected": "0"
       },
       {
-        "param": "kfragd_force_reclaim",
-        "path": "/proc/sys/vm/kfragd_force_reclaim",
+        "param": "kfragd_enabled",
+        "path": "/proc/sys/vm/kfragd_enabled",
+        "expected": "0"
+      },
+      {
+        "param": "compaction_proactiveness",
+        "path": "/proc/sys/vm/compaction_proactiveness",
+        "expected": "60"
+      },
+      {
+        "param": "mmap_align_16k",
+        "path": "/proc/sys/vm/mmap_align_16k",
         "expected": "1"
       },
       {
-        "param": "kfragd_interval_ms",
-        "path": "/proc/sys/vm/kfragd_interval_ms",
-        "expected": "100"
+        "param": "thp_2mb",
+        "path": "/sys/kernel/mm/transparent_hugepage/enabled",
+        "expected": "[never]"
       }
     ],
     "backend": {
@@ -158,17 +163,11 @@
         "seed": 20260617,
         "mode": "launch_only",
         "clear_logcat": true,
-        "max_cycles": 15,
-        "precondition_monkey": {
-          "enabled": true,
-          "killall_before": true,
-          "killall_only": true,
-          "lmkd_off": true
-        }
+        "max_cycles": 15
       }
     },
     "exp_ctx": {
-      "exp_name": "baseline_16k_nokcompressd",
+      "exp_name": "matrix_16k_community_a",
       "domain": "pixel",
       "platform": "pixel"
     },
@@ -186,20 +185,54 @@
   "sample_config": {
     "cycle_sample": {
       "vmstat": {
-        "interval_s": 10
+        "enabled": false
       },
       "buddyinfo": {
-        "enabled": true,
-        "interval_s": 5
+        "enabled": false
       },
       "thermal": {
-        "enabled": true,
-        "interval_s": 1
+        "enabled": false
       },
       "cpufreq": {
-        "enabled": true,
-        "interval_s": 2
+        "enabled": false
+      },
+      "counters": {
+        "enabled": false
       }
+    },
+    "tasktime": {
+      "procs": [
+        "kswapd0",
+        "kcompactd0",
+        "kfragd0"
+      ],
+      "strict": false
+    },
+    "trace": {
+      "captures": [
+        {
+          "name": "kswapd",
+          "events": [
+            "vmscan:mm_vmscan_kswapd_wake",
+            "vmscan:mm_vmscan_kswapd_sleep"
+          ],
+          "buffer_kb": 256
+        },
+        {
+          "name": null,
+          "events": [
+            "vmscan:mm_vmscan_direct_reclaim_begin",
+            "vmscan:mm_vmscan_direct_reclaim_end",
+            "vmscan:mm_vmscan_memcg_reclaim_begin",
+            "vmscan:mm_vmscan_memcg_reclaim_end",
+            "vmscan:mm_vmscan_reclaim_pages"
+          ],
+          "buffer_kb": 16384
+        }
+      ]
+    },
+    "power": {
+      "odpm": true
     }
   }
 }

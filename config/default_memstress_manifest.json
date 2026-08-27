@@ -15,7 +15,6 @@
       "zswpout"
     ],
     "interval_s": 60,
-    "use_su": true,
     "backend": {
       "name": "memstress",
       "config": {

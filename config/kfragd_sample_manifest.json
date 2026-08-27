@@ -1,7 +1,6 @@
 {
   "_template": "kfragd 实验示例: 只写 sample_config(部分字段) + 少量运行参数; 未写字段全部回落默认。",
   "config": {
-    "use_su": true,
     "backend": {
       "name": "memstress",
       "config": {
