@@ -132,9 +132,17 @@ def run_with_config(serial: str, out_dir: Path, input_cfg: Dict[str, Any],
     if not claim.startswith("running"):
         print(f"[{serial}] exp_lock: {claim}", file=sys.stderr)
         raise RuntimeError(
-            f"设备 ({domain},{serial}) 已被占用，实验 {exp_id} 不能启动。"
-            f"排队/等待请用启动器（exp_lock_poll_until_free），"
-            f"或查询 exp_lock_status 确认占用者。")
+            f"设备 ({domain},{serial}) 已被占用，实验 {exp_id} 不能启动。\n"
+            f"等待设备空闲的命令（轮询，空闲即返回 True）：\n"
+            f"  python3 -c \"import sys; sys.path.insert(0, 'src'); "
+            f"from exp_framework.utils.exp_lock import exp_lock_poll_until_free; "
+            f"print(exp_lock_poll_until_free('{domain}', '{serial}', "
+            f"poll_s=10, max_wait_s=3600))\"\n"
+            f"查询占用者：\n"
+            f"  python3 -c \"import sys; sys.path.insert(0, 'src'); "
+            f"from exp_framework.utils.exp_lock import exp_lock_status; "
+            f"print(exp_lock_status('{domain}', '{serial}'))\"\n"
+            f"设备空闲后再重跑本命令。")
 
     # 0b) 心跳线程（60s 刷新；cleanup 完成后停）
     heartbeat_stop = threading.Event()

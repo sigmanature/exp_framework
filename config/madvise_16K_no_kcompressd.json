@@ -15,21 +15,6 @@
         "expected": "0"
       },
       {
-        "param": "kswapd_order2_threshold",
-        "path": "/proc/sys/vm/kswapd_order2_threshold",
-        "expected": "0"
-      },
-      {
-        "param": "kswapd_o2_wakeup",
-        "path": "/proc/sys/vm/kswapd_order2_wakeup_threshold",
-        "expected": "0"
-      },
-      {
-        "param": "compact_o2_alloc_wake",
-        "path": "/proc/sys/vm/compact_order2_alloc_wake",
-        "expected": "0"
-      },
-      {
         "param": "zram_disksize",
         "path": "/sys/block/zram0/disksize",
         "expected": "8589934592"
