@@ -44,7 +44,7 @@
       {
         "param": "mmap_align_16k",
         "path": "/proc/sys/vm/mmap_align_16k",
-        "expected": "1"
+        "expected": "0"
       },
       {
         "param": "thp_2mb",
@@ -184,21 +184,8 @@
   "sample_errors": null,
   "sample_config": {
     "cycle_sample": {
-      "vmstat": {
-        "enabled": false
-      },
-      "buddyinfo": {
-        "enabled": false
-      },
-      "thermal": {
-        "enabled": false
-      },
-      "cpufreq": {
-        "enabled": false
-      },
-      "counters": {
-        "enabled": false
-      }
+      "interval_s": 60,
+      "probes": []
     },
     "tasktime": {
       "procs": [
@@ -225,7 +212,12 @@
             "vmscan:mm_vmscan_direct_reclaim_end",
             "vmscan:mm_vmscan_memcg_reclaim_begin",
             "vmscan:mm_vmscan_memcg_reclaim_end",
-            "vmscan:mm_vmscan_reclaim_pages"
+            "vmscan:mm_vmscan_reclaim_pages",
+            "compaction:mm_compaction_begin",
+            "compaction:mm_compaction_end",
+            "compaction:mm_compaction_try_to_compact_pages",
+            "compaction:mm_compaction_migratepages",
+            "compaction:mm_compaction_kcompactd_sleep"
           ],
           "buffer_kb": 16384
         }

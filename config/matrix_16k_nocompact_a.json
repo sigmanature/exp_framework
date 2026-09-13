@@ -44,7 +44,7 @@
       {
         "param": "mmap_align_16k",
         "path": "/proc/sys/vm/mmap_align_16k",
-        "expected": "1"
+        "expected": "0"
       },
       {
         "param": "thp_2mb",
@@ -184,21 +184,8 @@
   "sample_errors": null,
   "sample_config": {
     "cycle_sample": {
-      "vmstat": {
-        "enabled": false
-      },
-      "buddyinfo": {
-        "enabled": false
-      },
-      "thermal": {
-        "enabled": false
-      },
-      "cpufreq": {
-        "enabled": false
-      },
-      "counters": {
-        "enabled": false
-      }
+      "interval_s": 60,
+      "probes": []
     },
     "tasktime": {
       "procs": [

@@ -19,6 +19,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -34,6 +35,27 @@ _local = threading.Lock()  # 同进程多线程再串一层（fcntl 之外的补
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def busy_message(domain: str, device: str, exp_id: str) -> str:
+    """设备被占用时可复用的提示文案（文案含可执行命令）。
+
+    短壳（不走 runner.run_with_config 但自行 exp_lock_claim 的入口）遇到
+    rejected:busy / rejected:cleanup_failed 时用本函数生成相同格式的报错，
+    保证所有入口的提示一致。runner 同样用本函数。
+    """
+    return (
+        f"设备 ({domain},{device}) 已被占用，实验 {exp_id} 不能启动。\n"
+        f"等待设备空闲的命令（轮询，空闲即返回 True）：\n"
+        f"  python3 -c \"import sys; sys.path.insert(0, 'src'); "
+        f"from exp_framework.utils.exp_lock import exp_lock_poll_until_free; "
+        f"print(exp_lock_poll_until_free('{domain}', '{device}', "
+        f"poll_s=10, max_wait_s=3600))\"\n"
+        f"查询占用者：\n"
+        f"  python3 -c \"import sys; sys.path.insert(0, 'src'); "
+        f"from exp_framework.utils.exp_lock import exp_lock_status; "
+        f"print(exp_lock_status('{domain}', '{device}'))\"\n"
+        f"设备空闲后再重跑本命令。")
 
 
 def _read_cursor() -> Dict[str, Any]:
@@ -203,6 +225,74 @@ def exp_lock_heartbeat(domain: str, device: str, exp_id: str) -> str:
         _write_cursor(d)
         return "ok"
     return "warn:not-running"
+
+
+class ExpLockHeartbeat:
+    """锁心跳托管对象：start() 后按 interval_s 刷心跳，stop() 停线程。
+
+    心跳是"实验进程是否还活着"的唯一自动依据：
+    - GUI 队列看板（queue_model）读 heartbeat_ts，>120s 未更新标红
+    - exp_lock_poll_until_free 等待方以终态判断释放
+    若心跳一直失败（进程僵死/主机休眠/锁文件被清），游标会停在 running、
+    其他实验永远无法排队——所以失败必须可见：连续失败
+    stale_warn_failures 次即打印告警（含查询/清理命令提示）。
+    """
+
+    def __init__(self, domain: str, device: str, exp_id: str,
+                 interval_s: float = 60.0, stale_warn_failures: int = 3):
+        self._domain = domain
+        self._device = device
+        self._exp_id = exp_id
+        self._interval_s = interval_s
+        self._stale_warn_failures = stale_warn_failures
+        self._stop = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self.failures = 0
+        self.last_ok_ts: Optional[str] = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(
+            target=self._loop, name=f"exp_lock_hb_{self._device}",
+            daemon=True)
+        self._thread.start()
+
+    def stop(self, join_s: float = 2.0) -> None:
+        """停止心跳（幂等）。调用方释放锁前应确保已 stop。"""
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=join_s)
+            self._thread = None
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self._interval_s):
+            try:
+                result = exp_lock_heartbeat(
+                    self._domain, self._device, self._exp_id)
+                if result.startswith("ok"):
+                    self.failures = 0
+                    self.last_ok_ts = _now()
+                    continue
+                # 锁已不属于当前实验（released/cleaned）：停止心跳，不再打错
+                self.failures += 1
+                self._stop.set()
+                return
+            except Exception as exc:
+                self._fail(str(exc))
+
+    def _fail(self, detail: str) -> None:
+        self.failures += 1
+        if self.failures >= self._stale_warn_failures and \
+                self.failures % self._stale_warn_failures == 0:
+            print(
+                f"[{self._device}] exp_lock heartbeat FAILED "
+                f"x{self.failures} ({detail})——尝试心跳失败；"
+                f"若锁游标到期被清，需人工确认释放原因：\n"
+                f"  python3 -c \"import sys; sys.path.insert(0, 'src'); "
+                f"from exp_framework.utils.exp_lock import exp_lock_status; "
+                f"print(exp_lock_status('{self._domain}', '{self._device}'))\"",
+                file=sys.stderr)
 
 
 def exp_lock_get(domain: str, device: str) -> Optional[Dict]:

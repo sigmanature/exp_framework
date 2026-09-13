@@ -1,8 +1,8 @@
-"""Monkey 打碎 precondition：以用户操作方式耗尽 buddy order2+ 内存。
+"""Prefrag（打碎）precondition：以用户操作方式（抖音刷视频等）耗尽 buddy order2+ 内存。
 
 慢节奏深交互（用户确认的形态）：
-  对每个重内存应用：am start 点开 → monkey 单应用内深交互（throttle 500ms、
-  appswitch 0——不切走）→ 驻留后台 → 切下一个应用。
+  对每个重内存应用：am start 点开 → 自定义交互（抖音刷视频、bilibili 点视频等，
+  不是 monkey 随机事件）→ 驻留后台 → 切下一个应用。
   切换由脚本显式控制（不是 monkey 随机 appswitch），模拟"点开→玩→切走"。
 
 网络控制（实测：airplane_mode 标记在 Pixel6 不断网，必须组件级）：
@@ -230,7 +230,7 @@ def fragment(serial: str, apps: Sequence[str], events_per_app: int,
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    p = argparse.ArgumentParser(description="monkey 慢节奏深交互打碎 buddy 内存")
+    p = argparse.ArgumentParser(description="prefrag：自定义交互（抖音刷视频等）打碎 buddy 内存")
     p.add_argument("--serial", required=True)
     p.add_argument("--apps", nargs="*", default=None,
                    help="打碎应用包列表（默认 7 个重内存应用）")

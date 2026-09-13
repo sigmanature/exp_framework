@@ -8,7 +8,7 @@
 """
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List
 import threading
 
 REGISTRY: Dict[str, type] = {}
@@ -58,7 +58,38 @@ class Experiment(ABC):
 
         返回需要写进 run_manifest.json 的私有字段（如 packages_resolved）。
         失败抛 RuntimeError -> 实验在采样启动前中止。
+        每轮运行只执行一次（precondition 属于独立 hook，见 precondition()）。
         """
+
+    def precondition(self) -> Dict[str, Any]:
+        """可选：制造实验前置状态（碎片化/打碎等），由框架按模式调度。
+
+        两种调度模式（config["config"]["precondition"]["mode"]）：
+        - once       ：所有 round 前只跑一次（prepare 之后、第一轮采样之前）
+        - per_round  ：每个 round 开始前都跑一次
+        precondition 与 prepare 不同——prepare 做设备准备（唤醒/锁频/包解析），
+        每轮运行只执行一次；precondition 制造内存初始状态，按模式可反复执行。
+        返回值并入当轮 run_manifest.json（如 fragment 结果）。
+        """
+        return {}
+
+    def assign_work_dir(self, work_dir: Path) -> None:
+        """切换后端产物目录（多 round 实验：每轮一个子目录）。
+
+        默认 work_dir = out_dir / <backend.name>；多 round 时框架在每轮开始前
+        调用本方法，把 run() 产物落到 round_N/<backend.name>。
+        """
+        self.work_dir = work_dir
+        self.work_dir.mkdir(parents=True, exist_ok=True)
+
+    def device_residuals(self, serial: str) -> List[str]:
+        """可选：后端自身的设备端残留检查（结束后由框架合并上报）。
+
+        后端在自己层里检查自己部署的东西（如 device runner 进程/标记文件），
+        框架统一调用；返回空列表 = 无残留。采样设施（tasktime/trace probe）
+        的残留由 sample 层负责，不在这里。
+        """
+        return []
 
     @abstractmethod
     def run(self) -> Dict[str, Any]:

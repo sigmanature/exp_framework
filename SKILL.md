@@ -158,9 +158,30 @@ AOSP_ROOT=$PWD scripts/build_mthp_synth_apks.py \
 - synthetic 关键产物：`synthetic_workload_expectations.tsv/json/md`；有 `cycle_log.jsonl` 时还应有 `synthetic_workload_launch_weighted.tsv`
 - synthetic VMA 对齐产物：`synthetic_vma_maps.tsv`、`synthetic_vma_maps_summary.txt`
 
-## Precondition (可选独立脚本)
+## Precondition (两种方式：独立旧脚本 / 框架配置驱动)
 
-按实验需要在 memstress 之前运行，用来制造碎片化初始状态。默认 A/B 短测和常规长测不强制运行 precondition；只有明确要测碎片化初始状态或验证 fallback 压力时才启用。启用时，THP/系统参数由外部启动脚本设置，precondition 只负责 order-0 碎片化。
+**框架配置驱动（新，推荐）**：在 config 的 `config` 顶层加
+`"precondition": {"mode": "once"|"per_round", "restart": bool}`，打碎内容在
+`backend.config.prefrag`（threshold/max_swipes/killall_only/lmkd_off）。
+runner 按模式调度（`_apply_precondition`：restart → 重启等就绪 → 打碎）：
+- `once`：prepare 后、第一轮采样前执行一次，所有轮次共享；
+- `per_round`：每轮采样前重新执行（打碎会临时关 kfragd，框架每轮 sysctl
+  自检会恢复期望值）；
+- `restart: true`：打碎前先重启到干净系统态（重启是框架通用编排，不打进
+  任何后端）；
+- 不写 block = 不做任何 precondition。注意：memstress 的 prepare 现在**只**
+  做设备准备，打碎逻辑已迁到 precondition()。
+
+清理/残留检查归属：采样设施（trace probe/tasktime）由 sample 层
+（`sample_cleanup_remote` / `sample_device_residuals`）管理；各后端实现
+`Experiment.device_residuals()` 管自己部署的进程。runner 只调度、不展开
+具体工具命令。
+
+多轮次：`"rounds": 3`（缺省 1）——runner 默认循环；`rounds=1` 布局与旧版
+一致，`rounds>1` 产物在 `round_<n>/`，根目录为聚合清单。`rounds` 与
+`precondition.mode` 都有 CLI 覆盖：`--rounds` / `--precondition-mode`。
+
+**独立旧脚本（保留）**：按实验需要在 memstress 之前运行，用来制造碎片化初始状态。默认 A/B 短测和常规长测不强制运行 precondition；只有明确要测碎片化初始状态或验证 fallback 压力时才启用。启用时，THP/系统参数由外部启动脚本设置，precondition 只负责 order-0 碎片化。
 
 ```bash
 python3 scripts/precondition.py --serial <SERIAL> --alloc-mb 5000 --threshold 2000

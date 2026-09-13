@@ -123,7 +123,8 @@ def verify(config: dict) -> list:
     values = read_vmstat(serial, keys=keys)
     missing = [k for k in keys if k not in values]
     print(f"  {'vmstat_keys':<28s} = {len(keys) - len(missing)}/{len(keys)} 存在 "
-          f"[{'OK' if not missing else 'MISMATCH(缺 ' + str(missing) + ')'}]")
+          f"[{'OK' if not missing else 'MISMATCH(缺 ' + str(missing) + ')'}]",
+          flush=True)
     return [{"param": "vmstat_keys",
              "expected": f"{len(keys)} 个键存在",
              "actual": f"缺 {len(missing)} 个",

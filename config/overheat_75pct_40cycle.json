@@ -156,29 +156,64 @@
   "sample_errors": null,
   "sample_config": {
     "cycle_sample": {
-      "vmstat": {
-        "interval_s": 10
-      },
-      "buddyinfo": {
-        "enabled": true,
-        "interval_s": 5
-      },
-      "thermal": {
-        "enabled": true,
-        "interval_s": 2,
-        "zones": [
-          "thermal_zone16",
-          "thermal_zone0",
-          "thermal_zone1",
-          "thermal_zone2",
-          "thermal_zone3",
-          "thermal_zone25"
-        ]
-      },
-      "cpufreq": {
-        "enabled": true,
-        "interval_s": 2
-      }
+      "interval_s": 2,
+      "probes": [
+        {
+          "name": "vmstat",
+          "kind": "file",
+          "path": "/proc/vmstat",
+          "parse": "kv",
+          "out": "vmstat_samples.csv",
+          "enabled": true,
+          "interval_s": 10
+        },
+        {
+          "name": "buddyinfo",
+          "kind": "file",
+          "path": "/proc/buddyinfo",
+          "parse": "rows",
+          "out": "buddyinfo_samples.csv",
+          "enabled": true,
+          "interval_s": 4,
+          "label_keys": [
+            "zone"
+          ]
+        },
+        {
+          "name": "thermal",
+          "kind": "files",
+          "path_template": "/sys/class/thermal/{key}/temp",
+          "keys": [
+            "thermal_zone16",
+            "thermal_zone0",
+            "thermal_zone1",
+            "thermal_zone2",
+            "thermal_zone3",
+            "thermal_zone25"
+          ],
+          "cols": [
+            "temp_zone16",
+            "temp_zone0",
+            "temp_zone1",
+            "temp_zone2",
+            "temp_zone3",
+            "temp_zone25"
+          ],
+          "parse": "kv",
+          "out": "thermal_samples.csv",
+          "enabled": true,
+          "interval_s": 2
+        },
+        {
+          "name": "cpufreq",
+          "kind": "files",
+          "path_template": "/sys/devices/system/cpu/cpu{key}/cpufreq/scaling_cur_freq",
+          "parse": "kv",
+          "out": "cpufreq_samples.csv",
+          "enabled": true,
+          "interval_s": 2
+        }
+      ]
     }
   }
 }

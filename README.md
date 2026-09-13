@@ -152,6 +152,35 @@ Each run dir will contain:
 For the 4 KB baseline run, `fallback_ratio` may stay at zero or otherwise be less informative, because 16KB THP is disabled. The baseline run is still useful for comparing the workload path, `alloc_stall`, and `compact_stall` against the 16KB THP run.
 
 
+## Local GUI dashboard (expf_ui)
+
+A local Qt dashboard for browsing config templates, selecting/editing fields
+in a JSON tree, enqueueing runs into the device queue, and inspecting the
+running/finished experiments (queue cursor + per-run audit).
+
+```bash
+pip install -r requirements-gui.txt
+
+bash scripts/install_expf_cli.sh   # one-time: install user-level `expf` command
+expf                               # launch the dashboard (args pass through)
+python3 scripts/expf_ui.py                    # same thing without the wrapper
+python3 scripts/expf_ui.py --screenshot ui.png --select-template default_memstress_manifest.json
+                                              # headless render to PNG (debugging)
+python3 scripts/expf_ui_driver.py             # offscreen acceptance driver (QTest)
+```
+
+- Templates come from `config/*.json`; checkboxes decide which fields survive
+  into the submitted config (the bottom JSON preview shows exactly what will
+  be submitted). Serial / domain / exp_name are per-run toolbar parameters.
+- "入队运行" writes a submission snapshot under
+  `~/.worklog/expf/queue_jobs/<submission_id>/` and spawns the standard
+  runner (`python -m exp_framework.experiment.runner`) when the device is
+  free; the device lock cursor (`~/.worklog/run_cursor.json`) stays the
+  single source of truth for the queue.
+- Only backends registered in `experiment.REGISTRY` (currently `memstress`,
+  `madvise_pagout`) can be launched.
+
+
 ## Project file layout
 
 ```text
@@ -161,11 +190,14 @@ For the 4 KB baseline run, `fallback_ratio` may stay at zero or otherwise be les
 ├── config/
 │   └── default_memstress_manifest.json # default experiment configuration
 ├── scripts/                            # thin-shell entry points (path-compatible)
-│   └── run_memstress_and_collect_logs.py   # main script entry
+│   ├── run_memstress_and_collect_logs.py   # main script entry
+│   ├── expf_ui.py                          # local GUI dashboard entry
+│   └── expf_ui_driver.py                   # GUI acceptance driver (offscreen)
 └── src/exp_framework/                  # core library
     ├── run_memstress_and_collect_logs.py   # main script implementation
     ├── derive_metrics.py                   # generates derived.csv and summary.md
     ├── backend/                            # experiment backends (memstress, madvise_pagout)
     ├── experiment/                         # framework: runner / sample / config
+    ├── ui/                                 # expf_ui: Qt dashboard (model/queue/audit)
     └── utils/                              # modules required by the main script
 ```

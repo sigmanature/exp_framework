@@ -108,7 +108,7 @@ def ensure_zram(serial: str) -> None:
         raise RuntimeError("zram swap 启用失败")
 
 
-def cleanup_after_boot(serial: str, wait_after_boot_s: int = 90,
+def cleanup_after_boot(serial: str, wait_after_boot_s: int = 45,
                        stop_event=None, fresh_boot_uptime_s: int = 300) -> dict:
     """Best-effort boot cleanup before a workload:
     - wait until the system is fully booted (boot_completed=1)
@@ -182,6 +182,88 @@ def cleanup_after_boot(serial: str, wait_after_boot_s: int = 90,
         status["dropped"] = True
     except Exception:
         pass
+    return status
+
+
+def reboot_device_and_wait(serial: str, wait_after_boot_s: int = 45,
+                           stop_event=None, timeout_s: int = 600) -> dict:
+    """重启 → 上线 → boot_completed → 解锁保持亮屏 → settle+清理（合成编排）。
+
+    precondition 的"重启"段一个函数做完：
+      1. adb reboot，先等旧连接断开、再等设备重新上线（get-state == device）
+      2. 等 sys.boot_completed=1（framework 就绪，dumpsys 可用）
+      3. unlock_and_stay_awake()：唤醒+解除 keyguard+保持亮屏
+         （解锁后才能做抖音打碎等屏幕交互）
+      4. cleanup_after_boot()：settle（fresh boot 干等 wait_after_boot_s，
+         此时屏幕已解锁亮屏）+ force-stop 三方 + kill-all + drop caches
+    失败抛 RuntimeError；stop_event 置位则放弃（返回 {}）。
+    """
+    import subprocess
+    try:
+        cp = subprocess.run(["adb", "-s", serial, "reboot"],
+                            capture_output=True, timeout=30, check=False)
+    except Exception as exc:
+        raise RuntimeError(f"adb reboot failed: {exc}")
+    if cp.returncode != 0:
+        raise RuntimeError(f"adb reboot rc={cp.returncode}: "
+                           f"{cp.stdout} {cp.stderr}")
+
+    def _get_state() -> str:
+        try:
+            return subprocess.run(["adb", "-s", serial, "get-state"],
+                                  capture_output=True, text=True,
+                                  timeout=10).stdout.strip()
+        except Exception:
+            return ""
+
+    # 先等旧连接真正断开（否则可能读到重启前残留的 boot_completed）
+    deadline = time.monotonic() + timeout_s / 2
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            return {}
+        if _get_state() != "device":
+            break
+        sleep_interruptible(stop_event, 2)
+    # 断开后等重新上线
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            return {}
+        if _get_state() == "device":
+            break
+        sleep_interruptible(stop_event, 2)
+    else:
+        raise RuntimeError(f"device {serial} did not come back after reboot")
+
+    # 等 boot_completed（解锁需要 framework 就绪）
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            return {}
+        try:
+            out = subprocess.run(["adb", "-s", serial, "shell",
+                                  "getprop sys.boot_completed"],
+                                 capture_output=True, text=True,
+                                 timeout=15).stdout.strip()
+        except Exception:
+            out = ""
+        if out == "1":
+            break
+        sleep_interruptible(stop_event, 5)
+    else:
+        raise RuntimeError(f"device {serial}: boot_completed not seen after "
+                           f"reboot")
+
+    # 解锁保持亮屏 → 随后的 settle 在亮屏态下进行
+    unlock_and_stay_awake(serial, stop_event=stop_event)
+
+    status = cleanup_after_boot(serial, wait_after_boot_s=wait_after_boot_s,
+                                stop_event=stop_event)
+    if not status.get("booted"):
+        if stop_event is not None and stop_event.is_set():
+            return status
+        raise RuntimeError(f"device {serial}: boot_completed not seen after "
+                           f"reboot (status={status})")
     return status
 
 
@@ -312,7 +394,66 @@ def is_device_awake(serial: str) -> Tuple[bool, str]:
     return awake, summary
 
 
-def ensure_awake_unlocked_and_stay_awake(
+_UNLOCK_CMDS = [
+    "input keyevent KEYCODE_WAKEUP || true",
+    "wm dismiss-keyguard || true",
+    "input keyevent KEYCODE_MENU || true",
+    "input swipe 300 1400 300 400 200 || true",
+    "svc power stayon true || true",
+    "settings put global stay_on_while_plugged_in 3 || true",
+    "settings put system screen_off_timeout 1800000 || true",
+]
+
+
+def unlock_and_stay_awake(
+    serial: str,
+    log_path: Optional[Path] = None,
+    *,
+    retries: int = 3,
+    retry_sleep_s: int = 2,
+    stop_event=None,
+) -> bool:
+    """解锁/唤醒/保持亮屏（重启后的 precondition 用；不含冷却与锁频）。
+
+    重启后 Android 回到锁屏/息屏态——抖音打碎与后续负载需要屏幕已唤醒、
+    keyguard 已解除。只做解锁相关命令并轮询 mWakefulness 确认，
+    不碰 framework/冷却/锁频（那些由 prepare_cooldown_and_lock
+    在 prepare 阶段负责）。
+    """
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _log(msg: str) -> None:
+        if log_path is None:
+            return
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(f"{msg}  {datetime.now().isoformat()}\n")
+
+    _log("[unlock_and_stay_awake] start")
+    for attempt in range(1, max(1, retries) + 1):
+        if stop_event is not None and stop_event.is_set():
+            return False
+        for cmd in _UNLOCK_CMDS:
+            _log(f"$ {cmd}")
+            try:
+                out = adb_shell_retry(serial, cmd, timeout_s=20, retries=1,
+                                      retry_sleep_s=1)
+                if out and out.strip():
+                    _log(out.strip())
+            except Exception as e:
+                _log(f"ERR: {e}")
+        awake, wake_out = is_device_awake(serial)
+        _log(f"awake={awake} wake_out={wake_out}")
+        if awake:
+            _log("[unlock_and_stay_awake] done (awake)")
+            return True
+        if attempt < max(1, retries):
+            sleep_interruptible(stop_event, max(0, retry_sleep_s))
+    _log("[unlock_and_stay_awake] never awake within retries")
+    return False
+
+
+def prepare_cooldown_and_lock(
     serial: str,
     out_dir: Path,
     *,
@@ -320,27 +461,23 @@ def ensure_awake_unlocked_and_stay_awake(
     retry_sleep_s: int,
     stop_event=None,
 ) -> None:
-    """Best-effort device prep for stable long-running workloads.
+    """每轮 prepare：环境准备 + 冷却 + 锁频（不含解锁；解锁在 precondition 重启链）。
 
-    - wake screen
-    - attempt to dismiss keyguard
-    - set 'stay on' while plugged in
-    - increase screen timeout
-    - set SELinux permissive (setenforce 0) so root sysfs writes succeed
-    - lock CPU frequencies to max for stable measurements
+    每轮采样前的设备准备（幂等，可每轮重跑）：
+    - 系统环境：SELinux permissive、防热降频 trip、dexopt skip、飞行模式
+    - cleanup_after_boot + am kill-all：干净内存基线
+    - cool_down_with_framework_stop：冷却到 VIRTUAL-SKIN 阈值 + 锁频 75%
+    - post_framework_cleanup：framework 重启后二次清理
+    解锁（wake/keyguard）不在本函数——由 unlock_and_stay_awake 在
+    precondition 的重启链中执行。
     """
 
     log_path = out_dir / "device_prepare_log.txt"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # 解锁/唤醒/保持亮屏已抽为 unlock_and_stay_awake（precondition 重启后
+    # 复用同一实现）；这里只保留非解锁的"环境准备"命令。
     cmds = [
-        "input keyevent KEYCODE_WAKEUP || true",
-        "wm dismiss-keyguard || true",
-        "input keyevent KEYCODE_MENU || true",
-        "input swipe 300 1400 300 400 200 || true",
-        "svc power stayon true || true",
-        "settings put global stay_on_while_plugged_in 3 || true",
-        "settings put system screen_off_timeout 1800000 || true",
         # Airplane mode: Pixel tends to self-enable BT/WiFi after reboot;
         # keeps radio/wifi/bt scanning off during the experiment.
         "settings put global airplane_mode_on 1 || true",
@@ -397,34 +534,6 @@ def ensure_awake_unlocked_and_stay_awake(
                         f.write("\n")
             except Exception as e:
                 f.write(f"ERR: {e}\n")
-
-        for attempt in range(1, max(1, retries) + 1):
-            f.write(f"\n[{attempt}] {datetime.now().isoformat()}\n")
-            for cmd in cmds:
-                f.write(f"$ {cmd}\n")
-                try:
-                    out = adb_shell_retry(
-                        serial, cmd, timeout_s=20, retries=1, retry_sleep_s=1)
-                    if out.strip():
-                        f.write(out)
-                        if not out.endswith("\n"):
-                            f.write("\n")
-                except Exception as e:
-                    f.write(f"ERR: {e}\n")
-
-            awake, wake_out = is_device_awake(serial)
-            if wake_out:
-                f.write(f"wake_out={wake_out}\n")
-            f.write(f"awake={awake}\n")
-            f.flush()
-            if awake:
-                break
-            if attempt < max(1, retries):
-                sleep_interruptible(stop_event, max(0, retry_sleep_s))
-        else:
-            f.write("[prep] never became awake within retries\n")
-            f.flush()
-            return
 
         # Cool down: 自包含加速冷却（stop framework → 空转冷却 → 锁频 80% →
         # start framework → 就绪确认）。锁频在冷却后执行，实验起始温度真实；

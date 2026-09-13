@@ -336,8 +336,8 @@ class Memstress(Experiment):
     # ---- prepare：设备准备 + 包/活动解析 ----
 
     def prepare(self) -> Dict[str, Any]:
-        from exp_framework.utils.device_prep import ensure_awake_unlocked_and_stay_awake
-        ensure_awake_unlocked_and_stay_awake(
+        from exp_framework.utils.device_prep import prepare_cooldown_and_lock
+        prepare_cooldown_and_lock(
             self.serial, out_dir=self.out_dir, retries=3, retry_sleep_s=2,
             stop_event=self.stop_event)
         packages = list(self._cfg("packages", []) or [])
@@ -370,50 +370,58 @@ class Memstress(Experiment):
         except Exception:
             pass
         self._resolved = resolved
+        return {"packages_resolved": resolved}
 
-        # ---- 打碎 precondition（backend.config 配置 precondition_monkey 块时执行）----
-        # 流程：killall 清后台 → 临时关 kfragd/force_reclaim（不整理碎片，4b verify 会设回）
-        # → 网络开 → 刷抖音直到 order2+ < threshold → 断网（冷启动等效飞行模式）
-        # killall_only=True：只 killall + 断网（无抖音打碎——对照组：killall 后
-        # buddy 空闲是"最稳初始状态"，见用户确认）。
-        # lmkd_off=True：打碎/负载期间关 lmkd（防止它杀应用导致碎片反弹），
-        # 实验结束由 cleanup() 恢复 start lmkd。
-        pm = self._cfg("precondition_monkey", {}) or {}
-        if pm.get("enabled"):
-            from exp_framework.precondition_monkey import (fragment_douyin_until,
-                                                           set_network)
-            from exp_framework.utils import device_nodes as _dn
+    # ---- precondition：打碎（prefrag 块配置时执行；调度模式由框架控制）----
 
-            if pm.get("killall_before", True):
-                adb_shell(self.serial, "am kill-all || true",
-                          timeout_s=15, check=False)
-                time.sleep(2)
-            if pm.get("lmkd_off", True):
-                adb_shell(self.serial, "stop lmkd", timeout_s=15, check=False)
-                time.sleep(1)
+    def precondition(self) -> Dict[str, Any]:
+        """刷抖音打碎 buddy 内存（order2+ < threshold）。
 
-            if pm.get("killall_only"):
-                set_network(self.serial, enabled=False)
-                r = {"killall_only": True}
-            else:
-                for path, val in (("/proc/sys/vm/kfragd_enabled", "0"),
-                                  ("/proc/sys/vm/kfragd_force_reclaim", "0")):
-                    _dn.set_node(self.serial, path, val)
+        backend.config["prefrag"] 是"打碎内容"配置；调度时机（once/per_round）
+        由框架层 config.config.precondition.mode 决定。
+        流程：killall 清后台 → 临时关 kfragd/force_reclaim（不整理碎片，
+        下一步 sysctl 自检会设回期望值）→ 网络开 → 刷抖音直到 order2+ <
+        threshold（或 max_swipes 耗尽）→ 断网（冷启动等效飞行模式）。
 
-                set_network(self.serial, enabled=True)
-                r = fragment_douyin_until(
-                    self.serial,
-                    threshold=int(pm.get("buddy_threshold", 2000)),
-                    max_swipes=int(pm.get("max_swipes", 400)),
-                    gap_s=float(pm.get("gap_s", 0.1)))
-                set_network(self.serial, enabled=False)
-            print(f"[{self.serial}] fragment result: {r}", file=sys.stderr)
-            self._fragment_result = r
+        killall_only=True：只 killall + 断网（无抖音打碎——对照组：killall 后
+        buddy 空闲是"最稳初始状态"）。
+        lmkd_off：仅在显式配置 true 时关 lmkd（防它杀应用导致碎片反弹）；
+        缺省/不写 = lmkd 保持开启（实验默认形态）。关过则 cleanup() 恢复
+        start lmkd。
+        返回 {"fragment": {...}} 供 manifest 记录当轮打碎结果。
+        """
+        pm = self._cfg("prefrag", {}) or {}
+        if not pm.get("enabled"):
+            return {}
+        from exp_framework.prefrag import (fragment_douyin_until,
+                                           set_network)
+        from exp_framework.utils import device_nodes as _dn
 
-        result: Dict[str, Any] = {"packages_resolved": resolved}
-        if getattr(self, "_fragment_result", None):
-            result["fragment"] = self._fragment_result
-        return result
+        if pm.get("killall_before", True):
+            adb_shell(self.serial, "am kill-all || true",
+                      timeout_s=15, check=False)
+            time.sleep(2)
+        if pm.get("lmkd_off", False):
+            adb_shell(self.serial, "stop lmkd", timeout_s=15, check=False)
+            time.sleep(1)
+
+        if pm.get("killall_only"):
+            set_network(self.serial, enabled=False)
+            r = {"killall_only": True}
+        else:
+            for path, val in (("/proc/sys/vm/kfragd_enabled", "0"),
+                              ("/proc/sys/vm/kfragd_force_reclaim", "0")):
+                _dn.set_node(self.serial, path, val)
+
+            set_network(self.serial, enabled=True)
+            r = fragment_douyin_until(
+                self.serial,
+                threshold=int(pm.get("buddy_threshold", 2000)),
+                max_swipes=int(pm.get("max_swipes", 400)),
+                gap_s=float(pm.get("gap_s", 0.1)))
+            set_network(self.serial, enabled=False)
+        print(f"[{self.serial}] fragment result: {r}", file=sys.stderr)
+        return {"fragment": r}
 
     # ---- run：生成/推送 runner -> 轮询完成 -> pull/解析 ----
 
@@ -759,6 +767,23 @@ class Memstress(Experiment):
                                      timeout_s=15, check=False)
         except Exception:
             pass
+
+    def device_residuals(self, serial: str) -> List[str]:
+        """memstress 后端的设备端残留：device runner 进程仍在跑则报警。
+
+        只查自己部署的东西（runner 脚本/心跳日志），采样设施残留由
+        sample 层负责（sample_device_residuals）。
+        """
+        from exp_framework.utils import adb_utils
+        try:
+            out = adb_utils.adb_shell_root(
+                serial, "ps -A | grep '[d]evice_cycle_runner'",
+                timeout_s=5, check=False)
+            if (out or "").strip():
+                return [f"memstress runner 残留: {out.strip()[:80]}"]
+        except Exception as exc:
+            return [f"memstress residual check failed: {exc}"]
+        return []
 
     def cleanup(self) -> None:
         self.stop_device()

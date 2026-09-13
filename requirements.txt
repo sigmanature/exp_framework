@@ -1,2 +1,5 @@
-# No third-party Python packages are required.
+# Core runner: no third-party Python packages are required.
 # Host-side prerequisites: Python 3.10+ and adb available in PATH.
+#
+# For the local GUI dashboard (scripts/expf_ui.py), install separately:
+#   pip install -r requirements-gui.txt

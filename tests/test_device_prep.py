@@ -52,6 +52,8 @@ class TestCleanupLogic(unittest.TestCase):
     def test_fresh_boot_waits_then_cleans(self):
         calls = []
         with mock.patch("subprocess.run", side_effect=self._fake_run(calls)), \
+             mock.patch("exp_framework.utils.adb_utils.adb_shell_root",
+                        return_value="") as m_root, \
              mock.patch("time.sleep", return_value=None) as m_sleep, \
              mock.patch("time.monotonic", side_effect=itertools.count(0, 5)):
             status = cleanup_after_boot(SERIAL, wait_after_boot_s=90)
@@ -62,8 +64,10 @@ class TestCleanupLogic(unittest.TestCase):
         self.assertTrue(status["dropped"])
         # fresh boot (<300s uptime) must have slept the settle window
         self.assertTrue(any(90 in c.args for c in m_sleep.call_args_list))
-        # drop_caches must have been issued
-        joined = " ".join(" ".join(str(c) for c in c) for c in calls)
+        # cleanup steps go through the privileged adb_shell_root entry point
+        # (not subprocess.run): drop_caches must have been issued
+        joined = " ".join(" ".join(str(a) for a in c.args)
+                          for c in m_root.call_args_list)
         self.assertIn("drop_caches", joined)
         self.assertIn("am kill-all", joined)
         self.assertIn("am force-stop", joined)
@@ -72,6 +76,8 @@ class TestCleanupLogic(unittest.TestCase):
         calls = []
         with mock.patch("subprocess.run", side_effect=self._fake_run(
                 calls, uptime="900.0 200.0")), \
+             mock.patch("exp_framework.utils.adb_utils.adb_shell_root",
+                        return_value=""), \
              mock.patch("time.sleep", return_value=None) as m_sleep, \
              mock.patch("time.monotonic", side_effect=itertools.count(0, 5)):
             status = cleanup_after_boot(SERIAL, wait_after_boot_s=90)
@@ -104,6 +110,8 @@ class TestCleanupLogic(unittest.TestCase):
 
 
 @unittest.skipUnless(_device_online(), f"device {SERIAL} offline")
+@unittest.skipUnless(os.environ.get("FOLIO_RUN_REAL_DEVICE_TESTS") == "1",
+                     "real device test disabled by default")
 class TestCleanupRealDevice(unittest.TestCase):
     """Real device: call the actual function and verify the status."""
 

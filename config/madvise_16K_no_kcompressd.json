@@ -63,9 +63,18 @@
       "enabled": false
     },
     "cycle_sample": {
-      "vmstat": {
-        "interval_s": 60
-      }
+      "interval_s": 60,
+      "probes": [
+        {
+          "name": "vmstat",
+          "kind": "file",
+          "path": "/proc/vmstat",
+          "parse": "kv",
+          "out": "vmstat_samples.csv",
+          "enabled": true,
+          "interval_s": 60
+        }
+      ]
     }
   }
 }

@@ -159,7 +159,7 @@
         "mode": "launch_only",
         "clear_logcat": true,
         "max_cycles": 15,
-        "precondition_monkey": {
+        "prefrag": {
           "enabled": true,
           "buddy_threshold": 2000,
           "max_swipes": 400,
@@ -179,28 +179,58 @@
         "path": "/sys/module/kernel/parameters/fs_disable_large_folio",
         "expected": "0"
       }
-    ]
+    ],
+    "precondition": {
+      "mode": "once"
+    }
   },
   "packages_resolved": {},
   "samples": null,
   "sample_errors": null,
   "sample_config": {
     "cycle_sample": {
-      "vmstat": {
-        "interval_s": 10
-      },
-      "buddyinfo": {
-        "enabled": true,
-        "interval_s": 5
-      },
-      "thermal": {
-        "enabled": true,
-        "interval_s": 1
-      },
-      "cpufreq": {
-        "enabled": true,
-        "interval_s": 2
-      }
+      "interval_s": 1,
+      "probes": [
+        {
+          "name": "vmstat",
+          "kind": "file",
+          "path": "/proc/vmstat",
+          "parse": "kv",
+          "out": "vmstat_samples.csv",
+          "enabled": true,
+          "interval_s": 10
+        },
+        {
+          "name": "buddyinfo",
+          "kind": "file",
+          "path": "/proc/buddyinfo",
+          "parse": "rows",
+          "out": "buddyinfo_samples.csv",
+          "enabled": true,
+          "interval_s": 5,
+          "label_keys": [
+            "zone"
+          ]
+        },
+        {
+          "name": "thermal",
+          "kind": "files",
+          "path_template": "/sys/class/thermal/{key}/temp",
+          "parse": "kv",
+          "out": "thermal_samples.csv",
+          "enabled": true,
+          "interval_s": 1
+        },
+        {
+          "name": "cpufreq",
+          "kind": "files",
+          "path_template": "/sys/devices/system/cpu/cpu{key}/cpufreq/scaling_cur_freq",
+          "parse": "kv",
+          "out": "cpufreq_samples.csv",
+          "enabled": true,
+          "interval_s": 2
+        }
+      ]
     }
   }
 }

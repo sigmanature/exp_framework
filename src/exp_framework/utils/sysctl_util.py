@@ -41,8 +41,11 @@ def verify(config: Dict[str, Any]) -> List[Dict[str, Any]]:
         device_nodes.set_node(serial, path, _write_value(expected))
         actual = device_nodes.read_node(serial, path)
         ok = _match(actual, expected)
+        # flush=True：runner 可能被信号/kill 中止，未 flush 的 print 会随
+        # stdout 块缓冲丢失，导致"节点校验看似没跑"（实测教训）。
         print(f"  {n['param']:<28s} = {actual!r:<38s} "
-              f"[{'OK' if ok else 'MISMATCH(期望=' + expected + ')'}]")
+              f"[{'OK' if ok else 'MISMATCH(期望=' + expected + ')'}]",
+              flush=True)
         results.append({"param": n["param"], "expected": expected,
                         "actual": actual, "ok": ok})
     return results

@@ -139,13 +139,30 @@
   "sample_errors": null,
   "sample_config": {
     "cycle_sample": {
-      "vmstat": {
-        "interval_s": 10
-      },
-      "buddyinfo": {
-        "enabled": true,
-        "interval_s": 5
-      }
+      "interval_s": 5,
+      "probes": [
+        {
+          "name": "vmstat",
+          "kind": "file",
+          "path": "/proc/vmstat",
+          "parse": "kv",
+          "out": "vmstat_samples.csv",
+          "enabled": true,
+          "interval_s": 10
+        },
+        {
+          "name": "buddyinfo",
+          "kind": "file",
+          "path": "/proc/buddyinfo",
+          "parse": "rows",
+          "out": "buddyinfo_samples.csv",
+          "enabled": true,
+          "interval_s": 5,
+          "label_keys": [
+            "zone"
+          ]
+        }
+      ]
     }
   }
 }

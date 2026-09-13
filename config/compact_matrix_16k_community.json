@@ -1,5 +1,5 @@
 {
-  "_template": "16K 社区compaction: kfragd=0 proactiveness=30(wmark_low=70对齐kfragd)",
+  "_template": "16K 社区compaction: kfragd=0 proactiveness=60(wmark_low=40/wmark_high≈50 对齐 kfragd 50/40)",
   "serial": "<DEVICE_SERIAL>",
   "start_host_ts": null,
   "end_host_ts": null,
@@ -39,7 +39,7 @@
       {
         "param": "compaction_proactiveness",
         "path": "/proc/sys/vm/compaction_proactiveness",
-        "expected": "30"
+        "expected": "60"
       }
     ],
     "backend": {
@@ -154,13 +154,12 @@
         "mode": "launch_only",
         "clear_logcat": true,
         "max_cycles": 15,
-        "precondition_monkey": {
+        "prefrag": {
           "enabled": true,
           "buddy_threshold": 2000,
           "max_swipes": 400,
           "gap_s": 0.1,
-          "killall_before": true,
-          "lmkd_off": true
+          "killall_before": true
         }
       }
     },
@@ -175,28 +174,86 @@
         "path": "/sys/module/kernel/parameters/fs_disable_large_folio",
         "expected": "0"
       }
-    ]
+    ],
+    "precondition": {
+      "mode": "per_round",
+      "restart": true
+    },
+    "rounds": 3
   },
   "packages_resolved": {},
   "samples": null,
   "sample_errors": null,
   "sample_config": {
     "cycle_sample": {
-      "vmstat": {
-        "interval_s": 10
-      },
-      "buddyinfo": {
-        "enabled": true,
-        "interval_s": 5
-      },
-      "thermal": {
-        "enabled": true,
-        "interval_s": 1
-      },
-      "cpufreq": {
-        "enabled": true,
-        "interval_s": 2
-      }
+      "interval_s": 1,
+      "probes": [
+        {
+          "name": "vmstat",
+          "kind": "file",
+          "path": "/proc/vmstat",
+          "parse": "kv",
+          "out": "vmstat_samples.csv",
+          "enabled": true,
+          "interval_s": 10
+        },
+        {
+          "name": "buddyinfo",
+          "kind": "file",
+          "path": "/proc/buddyinfo",
+          "parse": "rows",
+          "out": "buddyinfo_samples.csv",
+          "enabled": true,
+          "interval_s": 5,
+          "label_keys": [
+            "zone"
+          ]
+        },
+        {
+          "name": "thermal",
+          "kind": "files",
+          "path_template": "/sys/class/thermal/{key}/temp",
+          "parse": "kv",
+          "out": "thermal_samples.csv",
+          "enabled": true,
+          "interval_s": 1
+        },
+        {
+          "name": "cpufreq",
+          "kind": "files",
+          "path_template": "/sys/devices/system/cpu/cpu{key}/cpufreq/scaling_cur_freq",
+          "parse": "kv",
+          "out": "cpufreq_samples.csv",
+          "enabled": true,
+          "interval_s": 2
+        }
+      ]
+    },
+    "trace": {
+      "captures": [
+        {
+          "name": null,
+          "events": [
+            "compaction:mm_compaction_begin",
+            "compaction:mm_compaction_end",
+            "compaction:mm_compaction_try_to_compact_pages",
+            "compaction:mm_compaction_migratepages",
+            "compaction:mm_compaction_kcompactd_sleep",
+            "compaction:mm_compaction_isolate_freepages",
+            "compaction:mm_compaction_isolate_migratepages"
+          ],
+          "buffer_kb": 16384
+        }
+      ]
+    },
+    "tasktime": {
+      "procs": [
+        "kswapd0",
+        "kcompactd0",
+        "kfragd0"
+      ],
+      "interval_s": 2,
+      "strict": false
     }
   }
 }

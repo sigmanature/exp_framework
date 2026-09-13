@@ -1,0 +1,5 @@
+# cp2a.260705.006 官方 vendor_boot 的 bootconfig 键（解包自官方 vendor_boot.img）
+# 组装时本文件原样 + kernel{注入参数}；来源: /home/nzzhao/learn_os/oriole-cp2a.260705.006.a1-factory-218b72cb
+androidboot.load_modules_parallel=true
+androidboot.boot_devices=14700000.ufs
+androidboot.wait_for_udc=true

@@ -1,0 +1,106 @@
+{
+  "_template": "frag_ab: fragmem 持续压力, kfragd 100ms 70/30, 16K mTHP",
+  "config": {
+    "rounds": 5,
+    "sysctl_nodes": [
+      {
+        "param": "kfragd_enabled",
+        "path": "/proc/sys/vm/kfragd_enabled",
+        "expected": "1"
+      },
+      {
+        "param": "kfragd_interval_ms",
+        "path": "/proc/sys/vm/kfragd_interval_ms",
+        "expected": "100"
+      },
+      {
+        "param": "kfragd_frag_high",
+        "path": "/proc/sys/vm/kfragd_frag_high",
+        "expected": "70"
+      },
+      {
+        "param": "kfragd_frag_low",
+        "path": "/proc/sys/vm/kfragd_frag_low",
+        "expected": "30"
+      },
+      {
+        "param": "kfragd_force_reclaim",
+        "path": "/proc/sys/vm/kfragd_force_reclaim",
+        "expected": "0"
+      },
+      {
+        "param": "mthp_16k",
+        "path": "/sys/kernel/mm/transparent_hugepage/hugepages-16kB/enabled",
+        "expected": "[always]"
+      }
+    ],
+    "backend": {
+      "name": "frag_ab",
+      "config": {
+        "source": "fragmem",
+        "duration_s": 180,
+        "fragmem_alloc_mb": 4000,
+        "fragmem_cycle_s": 15
+      }
+    },
+    "precondition": {
+      "mode": "once",
+      "restart": true
+    },
+    "exp_ctx": {
+      "exp_name": "frag_ab_fragmem_16k",
+      "domain": "pixel",
+      "platform": "pixel"
+    }
+  },
+  "sample_config": {
+    "cycle_sample": {
+      "interval_s": 20,
+      "probes": [
+        {
+          "name": "counters",
+          "enabled": true,
+          "interval_s": 60
+        },
+        {
+          "name": "vmstat",
+          "enabled": true
+        },
+        {
+          "name": "buddyinfo",
+          "enabled": true,
+          "interval_s": 20
+        },
+        {
+          "name": "pagetypeinfo",
+          "enabled": true,
+          "interval_s": 10
+        }
+      ]
+    },
+    "tasktime": {
+      "procs": [
+        "kswapd0",
+        "kcompactd0",
+        "kfragd0"
+      ],
+      "interval_s": 2,
+      "strict": false
+    },
+    "trace": {
+      "captures": [
+        {
+          "name": "main",
+          "events": [
+            "vmscan:mm_vmscan_direct_reclaim_begin",
+            "vmscan:mm_vmscan_direct_reclaim_end",
+            "vmscan:mm_vmscan_memcg_reclaim_begin",
+            "vmscan:mm_vmscan_memcg_reclaim_end",
+            "vmscan:mm_vmscan_reclaim_pages"
+          ],
+          "buffer_kb": 16384
+        }
+      ]
+    }
+  }
+}

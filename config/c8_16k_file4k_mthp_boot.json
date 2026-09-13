@@ -1,0 +1,243 @@
+{
+  "_template": "c8: 8 cycles, kfragd per config, prefrag(douyin), lmkd_off=false",
+  "serial": "<DEVICE_SERIAL>",
+  "start_host_ts": null,
+  "end_host_ts": null,
+  "status": "pending",
+  "config": {
+    "counters": [
+      "anon_fault_alloc",
+      "anon_fault_fallback",
+      "anon_fault_fallback_charge",
+      "split",
+      "swpin",
+      "swpout",
+      "zswpout"
+    ],
+    "interval_s": 60,
+    "sysctl_nodes": [
+      {
+        "param": "kfragd_enabled",
+        "path": "/proc/sys/vm/kfragd_enabled",
+        "expected": "1"
+      },
+      {
+        "param": "zram_disksize",
+        "path": "/sys/block/zram0/disksize",
+        "expected": "8589934592"
+      },
+      {
+        "param": "mthp_16k",
+        "path": "/sys/kernel/mm/transparent_hugepage/hugepages-16kB/enabled",
+        "expected": "[always]"
+      },
+      {
+        "param": "kcompressd_enabled",
+        "path": "/sys/module/kcompressd/parameters/kcompressd_enabled",
+        "expected": "0"
+      },
+      {
+        "param": "kfragd_force_reclaim",
+        "path": "/proc/sys/vm/kfragd_force_reclaim",
+        "expected": "1"
+      },
+      {
+        "param": "kfragd_interval_ms",
+        "path": "/proc/sys/vm/kfragd_interval_ms",
+        "expected": "100"
+      }
+    ],
+    "backend": {
+      "name": "memstress",
+      "config": {
+        "packages": [
+          "com.chinamworld.main",
+          "com.sdu.didi.psnger",
+          "com.tencent.tmgp.pubgmhd",
+          "me.ele",
+          "com.baidu.homework",
+          "com.tencent.mm",
+          "com.cainiao.wireless",
+          "com.kugou.android",
+          "com.achievo.vipshop",
+          "com.tencent.KiHan",
+          "com.chinamworld.bocmbci",
+          "com.ss.android.article.video",
+          "com.zhihu.android",
+          "com.MobileTicket",
+          "com.tencent.news",
+          "cn.wps.moffice_eng",
+          "com.alibaba.android.rimet",
+          "com.baidu.searchbox",
+          "com.kmxs.reader",
+          "com.qidian.QDReader",
+          "com.tencent.tmgp.sgame",
+          "com.xs.fm",
+          "com.kuaiduizuoye.scan",
+          "com.phoenix.read",
+          "com.icbc",
+          "com.mfashiongallery.emag",
+          "com.dz.hmjc",
+          "com.netease.cloudmusic",
+          "com.tencent.mtt",
+          "com.sina.weibo",
+          "com.tencent.jkchess",
+          "com.cmri.universalapp",
+          "com.sinovatech.unicom.ui",
+          "com.moji.mjweather",
+          "com.microsoft.emmx",
+          "com.baidu.searchbox.lite",
+          "com.shizhuang.duapp",
+          "com.cat.readall",
+          "com.xs.fm.lite",
+          "com.baidu.BaiduMap",
+          "com.xunmeng.pinduoduo",
+          "com.ss.android.article.lite",
+          "com.larus.nova",
+          "com.taobao.live",
+          "com.kuaishou.nebula",
+          "com.ss.android.ugc.live",
+          "tv.danmaku.bili",
+          "com.ss.android.ugc.livelite",
+          "cmb.pb",
+          "com.ximalaya.ting.android",
+          "com.tencent.qqlive",
+          "com.tencent.tmgp.dfm",
+          "com.hpbr.bosszhipin",
+          "com.deepseek.chat",
+          "com.youku.phone",
+          "com.duowan.kiwi",
+          "com.ss.android.ugc.aweme",
+          "com.dragon.read",
+          "com.jingyao.easybike",
+          "com.qiyi.video",
+          "com.eg.android.AlipayGphone",
+          "com.taobao.idlefish",
+          "com.luna.music",
+          "com.smile.gifmaker",
+          "com.tencent.mobileqq",
+          "com.ct.client",
+          "com.videogo",
+          "com.ss.android.auto",
+          "com.taobao.taobao",
+          "com.ss.android.article.news",
+          "com.netease.party.mi",
+          "com.happyelements.AndroidAnimal",
+          "com.alibaba.wireless",
+          "com.taobao.litetao",
+          "com.greenpoint.android.mc10086.activity",
+          "com.tmall.wireless",
+          "com.miHoYo.Yuanshen",
+          "com.unionpay",
+          "com.quark.browser",
+          "com.tmri.app.main",
+          "com.tencent.gamehelper.smoba",
+          "com.tencent.androidqqmail",
+          "com.xingin.xhs",
+          "com.snda.wifilocating",
+          "com.tencent.apps.valorant",
+          "com.dianping.v1",
+          "com.duokan.reader",
+          "com.chaoxing.mobile",
+          "com.baidu.netdisk",
+          "ctrip.android.view",
+          "com.tencent.qqmusic",
+          "com.duokan.phone.remotecontroller",
+          "com.sankuai.meituan.takeoutnew",
+          "cn.xuexi.android",
+          "com.baidu.tieba",
+          "com.lemon.lv",
+          "com.sankuai.meituan",
+          "com.UCMobile",
+          "com.ss.android.ugc.aweme.lite"
+        ],
+        "burst_size": 4,
+        "hold_ms": 15,
+        "launch_gap_ms": 15,
+        "cycle_sleep_ms": 1000,
+        "seed": 20260617,
+        "mode": "launch_only",
+        "clear_logcat": true,
+        "max_cycles": 8,
+        "prefrag": {
+          "enabled": true,
+          "buddy_threshold": 2000,
+          "max_swipes": 400,
+          "gap_s": 0.1,
+          "killall_before": true,
+          "lmkd_off": false
+        }
+      }
+    },
+    "exp_ctx": {
+      "exp_name": "c8_16k_file4k_mthp_boot",
+      "domain": "pixel",
+      "platform": "pixel"
+    },
+    "boot_params": [
+      {
+        "param": "fs_disable_large_folio",
+        "path": "/sys/module/kernel/parameters/fs_disable_large_folio",
+        "expected": "1"
+      },
+      {
+        "param": "thp_anon",
+        "path": "/proc/cmdline",
+        "expected": "16K:always",
+        "contains": true
+      }
+    ],
+    "precondition": {
+      "mode": "once"
+    }
+  },
+  "packages_resolved": {},
+  "samples": null,
+  "sample_errors": null,
+  "sample_config": {
+    "cycle_sample": {
+      "interval_s": 1,
+      "probes": [
+        {
+          "name": "vmstat",
+          "kind": "file",
+          "path": "/proc/vmstat",
+          "parse": "kv",
+          "out": "vmstat_samples.csv",
+          "enabled": true,
+          "interval_s": 10
+        },
+        {
+          "name": "buddyinfo",
+          "kind": "file",
+          "path": "/proc/buddyinfo",
+          "parse": "rows",
+          "out": "buddyinfo_samples.csv",
+          "enabled": true,
+          "interval_s": 5,
+          "label_keys": [
+            "zone"
+          ]
+        },
+        {
+          "name": "thermal",
+          "kind": "files",
+          "path_template": "/sys/class/thermal/{key}/temp",
+          "parse": "kv",
+          "out": "thermal_samples.csv",
+          "enabled": true,
+          "interval_s": 1
+        },
+        {
+          "name": "cpufreq",
+          "kind": "files",
+          "path_template": "/sys/devices/system/cpu/cpu{key}/cpufreq/scaling_cur_freq",
+          "parse": "kv",
+          "out": "cpufreq_samples.csv",
+          "enabled": true,
+          "interval_s": 2
+        }
+      ]
+    }
+  }
+}

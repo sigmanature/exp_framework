@@ -22,7 +22,9 @@ from exp_framework.experiment.config import load_default_sample_config
 from exp_framework.utils.adb_utils import adb_shell, start_logcat_stream
 from exp_framework.utils import adb_utils
 from exp_framework.utils.crash_signature import TargetCrashSignatureDetector
-from exp_framework.utils.cycle_sample import start_cycle_samplers
+from exp_framework.utils.cycle_sample import (start_cycle_probes,
+                                              stop_cycle_probes,
+                                              vmstat_probe_keys)
 from exp_framework.utils.lockstat_utils import (capture_lock_stat, lock_stat_delta,
                                   read_lock_stat)
 from exp_framework.utils.sampling_utils import (run_derive_metrics,)
@@ -32,6 +34,52 @@ from exp_framework.utils.vmstat_utils import (derive_vmstat_csv, read_vmstat)
 
 _TASKTIME_DEV = "/data/local/tmp/tasktime"
 _TASKTIME_OUT = "/data/local/tmp/tasktime_out.txt"
+
+
+# ---------------- 设备端残留清理 / 检查（采样设施归本层所有）----------------
+
+def sample_cleanup_remote(serial: str) -> None:
+    """停掉采样层设备端残留：trace probe 停止标记 + 关 tracing + tasktime。
+
+    与 sample_start 启动的设施一一对应；任何实验终态（含信号清理）调用。
+    """
+    from exp_framework.utils import trace_utils
+    from exp_framework.utils import adb_utils
+    for cmd in (
+        f"touch {trace_utils.PROBE_DIR}/stop 2>/dev/null; "
+        "echo 0 > /sys/kernel/tracing/tracing_on 2>/dev/null; true",
+        "pkill -x tasktime 2>/dev/null; true",
+    ):
+        try:
+            adb_utils.adb_shell_root(serial, cmd, timeout_s=5, check=False)
+        except Exception:
+            pass
+
+
+def sample_device_residuals(serial: str) -> List[str]:
+    """采样层残留检查：trace probe reader 进程、tasktime。
+
+    归本层所有：runner 只调用不展开（与后端设备残留合并）。
+    """
+    from exp_framework.utils import adb_utils
+    problems: List[str] = []
+    try:
+        out = adb_utils.adb_shell_root(
+            serial, "ps -A | grep 'probe\\.sh' | grep -v grep",
+            timeout_s=5, check=False)
+        if (out or "").strip():
+            problems.append(f"trace probe 残留: {out.strip()[:80]}")
+    except Exception as exc:
+        problems.append(f"sample residual check failed: {exc}")
+    try:
+        cnt = adb_utils.adb_shell_root(
+            serial, "ps -A | grep '[t]asktime' | wc -l", timeout_s=5,
+            check=False).strip()
+        if cnt.isdigit() and int(cnt) > 0:
+            problems.append(f"tasktime 残留 ({cnt})")
+    except Exception as exc:
+        problems.append(f"tasktime residual check failed: {exc}")
+    return problems
 
 
 # ---------------- tasktime（设备端 CPU 时间采样）----------------
@@ -342,13 +390,17 @@ def sample_start(serial: str, out_dir: Path, sample_cfg: Dict[str, Any],
     """
     sess = SampleSession()
     cycle_cfg = sample_cfg.get("cycle_sample", {}) or {}
-    vmstat_cfg = cycle_cfg.get("vmstat", {}) or {}
-    sess.vmstat_keys = vmstat_cfg.get("keys") or None
+    sess.vmstat_keys = vmstat_probe_keys(sample_cfg) or None
+    # 域级 enabled 守卫（缺省=true，兼容老模板）：manifest 可用 {"enabled": false}
+    # 显式关闭单个域——否则深合并下"未写"会回落默认（如 power.odpm 默认开）。
     lock_stat_enabled = bool(sample_cfg.get("lock_stat", {}).get("enabled", False))
-    odpm_enabled = bool(sample_cfg.get("power", {}).get("odpm", False))
-    trace_captures = list(sample_cfg.get("trace", {}).get("captures") or [])
-    tasktime_procs = [p.strip() for p in
-                      (sample_cfg.get("tasktime", {}).get("procs") or []) if p]
+    odpm_enabled = bool(sample_cfg.get("power", {}).get("odpm", False)) \
+        and bool(sample_cfg.get("power", {}).get("enabled", True))
+    trace_captures = list(sample_cfg.get("trace", {}).get("captures") or []) \
+        if bool(sample_cfg.get("trace", {}).get("enabled", True)) else []
+    tasktime_procs = [] if not bool(sample_cfg.get("tasktime", {}).get(
+        "enabled", True)) else [p.strip() for p in
+        (sample_cfg.get("tasktime", {}).get("procs") or []) if p]
     sess.trace_captures = trace_captures
     sess.odpm_enabled = odpm_enabled
     sess.lock_stat_enabled = lock_stat_enabled
@@ -437,9 +489,9 @@ def sample_start(serial: str, out_dir: Path, sample_cfg: Dict[str, Any],
     sess.local_stop = local_stop  # 正常收尾只停采样线程，不污染 stop_event
 
     sess.cycle_sample_result: Dict = {}
-    sess.threads.extend(start_cycle_samplers(
-        serial, out_dir, cycle_cfg, combined_stop,
-        result_sink=sess.cycle_sample_result))
+    sess.cycle_cfg = cycle_cfg
+    sess.threads.extend(start_cycle_probes(
+        serial, out_dir, cycle_cfg, combined_stop))
 
     # ---- crash 检测 + logcat ----
     if not getattr(args, "no_crash_detect", False) and resolved_pkgs:
@@ -478,11 +530,18 @@ def sample_end(serial: str, out_dir: Path, sample_cfg: Dict[str, Any],
         if t is not None:
             t.join(timeout=10)
 
-    # counters 采样结果回写（原始 (num, err) 或 None）
-    counters_result = getattr(sess, "cycle_sample_result", {}).get("counters")
-    if isinstance(counters_result, tuple) and len(counters_result) == 2:
-        sess.sampling_result = {"samples": counters_result[0],
-                                "errors": counters_result[1]}
+    # counters 采样结果回写（统一探针：停进程 + pull raw + 解析 CSV）
+    if getattr(sess, "cycle_cfg", None):
+        try:
+            sess.cycle_sample_result = stop_cycle_probes(
+                serial, out_dir, sess.cycle_cfg) or {}
+        except Exception as error:
+            print(f"[{serial}] cycle_sample stop failed: {error}",
+                  file=sys.stderr)
+            sess.cycle_sample_result = {}
+    counters_result = sess.cycle_sample_result.get("counters")
+    if isinstance(counters_result, int):
+        sess.sampling_result = {"samples": counters_result, "errors": 0}
 
     if sess.logcat_handle:
         try:
